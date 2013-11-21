@@ -215,7 +215,7 @@ void Mapping::mergeDerivatives( const unsigned& ider, const double& df ){
 void Mapping::apply(){
   if( getForcesFromVessels( forcesToApply ) ){
      addForcesOnArguments( forcesToApply );
-     setForcesOnAtoms( forcesToApply, getNumberOfArguments() );
+     if( getNumberOfAtoms()>0 ) setForcesOnAtoms( forcesToApply, getNumberOfArguments() );
   }
 }
 
