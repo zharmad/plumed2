@@ -34,6 +34,8 @@ class GridVesselBase : public Vessel {
 private:
 /// The number of points in the grid
  unsigned npoints;
+/// Write the contents of the grid to the checkpoint file
+  bool checkpoint;
 /// The names of the various columns in the grid file
  std::vector<std::string> arg_names;
 /// The minimum and maximum in the grid stored as strings 
@@ -98,6 +100,12 @@ public:
   double getCellVolume() const ;
 /// Get the value of the ith grid element 
   double getGridElement( const unsigned&, const unsigned& ) const ;
+/// Use grid checkpointing
+  void storeInCheckpoint();
+/// Write data to the checkpoint file
+  void writeToCheckpoint( OFile& cfile );
+/// Read data from checkpoint file
+  void readFromCheckpoint( IFile& cifile );
 };
 
 inline
