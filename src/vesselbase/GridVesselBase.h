@@ -32,8 +32,13 @@ namespace vesselbase {
 
 class GridVesselBase : public Vessel {
 private:
+/// These two variables are used to 
+/// remember the box we were in on the previous call
+ unsigned bold;
 /// The number of points in the grid
  unsigned npoints;
+/// Remember the neighbors that were used last time
+ std::vector<unsigned> current_neigh; 
 /// The names of the various columns in the grid file
  std::vector<std::string> arg_names;
 /// The minimum and maximum in the grid stored as strings 
@@ -42,6 +47,8 @@ private:
  std::vector<double> min, max;
 /// The spacing between grid points
  std::vector<double> dx;
+/// The numerical distance between adjacent grid points
+ std::vector<unsigned> stride;
 /// The number of bins in each grid direction
  std::vector<unsigned> nbin;
 /// Is this direction periodic
@@ -65,7 +72,7 @@ protected:
 /// Get the indices fof a point
  void getIndices( const unsigned& index, std::vector<unsigned>& indices ) const ;
 /// Get the indices at which a particular point resides
- void getIndices(const std::vector<double>& x, std::vector<unsigned>& indices) const ; 
+// void getIndices(const std::vector<double>& x, std::vector<unsigned>& indices) const ; 
 
 /// Operations on one of the elements of grid point i
  void setGridElement( const unsigned&, const unsigned&, const double& );
@@ -98,6 +105,13 @@ public:
   double getCellVolume() const ;
 /// Get the value of the ith grid element 
   double getGridElement( const unsigned&, const unsigned& ) const ;
+/// Get the numerical index for the box that contains a particular point
+ unsigned getGridElementNumber( const std::vector<double>& x );
+/// Get the points neighboring a particular spline point
+ void getSplineNeighbors( const unsigned& mybox, std::vector<unsigned>& mysneigh );
+/// Calculate the vector from the grid point to point x then normalize by grid spacing
+/// This is useful for interpolation
+ void getFractionFromGridPoint( const unsigned& igrid, const std::vector<double>& x, std::vector<double>& dd );
 };
 
 inline
