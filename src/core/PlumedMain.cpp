@@ -283,6 +283,9 @@ void PlumedMain::cmd(const std::string & word,void*val){
        CHECK_INIT(initialized,word);
        CHECK_NULL(val,word);
        stopFlag=static_cast<int*>(val);
+  } else if(word=="writeCheckPointFile"){
+       CHECK_INIT(initialized,word);
+       writeCheckPointFile();
   } else if(word=="getExchangesFlag"){
        CHECK_INIT(initialized,word);
        CHECK_NULL(val,word);
@@ -384,6 +387,15 @@ void PlumedMain::readInputFile(std::string str){
   exchangePatterns.setFlag(exchangePatterns.NONE);
   while(Tools::getParsedLine(ifile,words) && words[0]!="ENDPLUMED") readInputWords(words);
   log.printf("END FILE: %s\n",str.c_str());
+  log.flush();
+  // Read in checkpoint file
+  if( getRestart() ){
+      IFile cifile; cifile.link(*this); cifile.open("plumed_state.itp");
+      for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
+          (*p)->restartFromCheckPointFile( cifile );
+      }
+      cifile.close();
+  }
   log.flush();	
 
   pilots=actionSet.select<ActionPilot*>();
@@ -674,6 +686,19 @@ void PlumedMain::runJobsAtEndOfCalculation(){
   for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
       (*p)->runFinalJobs();
   }
+}
+
+void PlumedMain::writeCheckPointFile(){
+  // Backup previous checkpoint file
+  FILE* ff = std::fopen("plumed_state.itp","r");
+  if(ff) rename("plumed_state.itp","plumed_prev_state.itp");
+
+  // Write everything to checkpoint file
+  OFile cfile; cfile.link(*this); cfile.open("plumed_state.itp","w+");
+  for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
+      (*p)->dumpCheckPointFile( cfile ); 
+  }
+  cfile.close();
 } 
 
 }

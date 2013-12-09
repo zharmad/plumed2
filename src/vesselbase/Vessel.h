@@ -83,8 +83,6 @@ private:
   const int numlab;
 /// The action that this vessel is created within
   ActionWithVessel* action;
-/// Something to store the buffer if this is required
-  std::vector<double> stash;
 /// The start of this Vessel's buffer in buffer in the underlying ActionWithVessel
   unsigned bufstart;
 /// The number of elements in this vessel's buffered data
@@ -122,14 +120,12 @@ protected:
   double getNLTolerance() const ;
 /// Set the size of the data buffer
   void resizeBuffer( const unsigned& n );
+/// Return bufsize
+  unsigned getSizeOfBuffer() const ;
 /// Set the value of the ith element in the buffer
   void setBufferElement( const unsigned& i, const double& val);
 /// Get the value in the ith element of the buffer
   double getBufferElement( const unsigned& i ) const ;
-/// Store everything that is the buffers
-  void stashBuffers();
-/// Add the contents of the stash to the buffer
-  void setBufferFromStash();
 public:
 /// Reference to the log on which to output details
   Log& log;
@@ -217,7 +213,12 @@ int Vessel::getNumericalLabel() const {
 
 inline
 void Vessel::resizeBuffer( const unsigned& n ){
-  bufsize=n; stash.resize(bufsize);  
+  bufsize=n; 
+}
+
+inline
+unsigned Vessel::getSizeOfBuffer() const {
+  return bufsize;
 }
 
 inline

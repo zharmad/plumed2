@@ -39,6 +39,8 @@ private:
  unsigned npoints;
 /// Remember the neighbors that were used last time
  std::vector<unsigned> current_neigh; 
+/// Write the contents of the grid to the checkpoint file
+ bool checkpoint;
 /// The names of the various columns in the grid file
  std::vector<std::string> arg_names;
 /// The minimum and maximum in the grid stored as strings 
@@ -112,6 +114,12 @@ public:
 /// Calculate the vector from the grid point to point x then normalize by grid spacing
 /// This is useful for interpolation
  void getFractionFromGridPoint( const unsigned& igrid, const std::vector<double>& x, std::vector<double>& dd );
+/// Use grid checkpointing
+  void storeInCheckpoint();
+/// Write data to the checkpoint file
+  void writeToCheckpoint( OFile& cfile );
+/// Read data from checkpoint file
+  void readFromCheckpoint( IFile& cifile );
 };
 
 inline

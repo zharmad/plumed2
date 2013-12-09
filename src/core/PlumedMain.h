@@ -225,6 +225,12 @@ public:
   makes sures they are done
 */
   void runJobsAtEndOfCalculation();
+
+/**
+  Write data on history dependent potentials to the checkpoint file
+*/
+  void writeCheckPointFile(); 
+
 /// Reference to atoms object
   Atoms& getAtoms();
 /// Reference to the list of Action's

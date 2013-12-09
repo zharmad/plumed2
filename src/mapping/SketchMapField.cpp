@@ -125,6 +125,7 @@ void SketchMapField::calculate(){
 }
 
 void SketchMapField::performTask(){
+  plumed_dbg_assert( active_frames.isActive( getCurrentTask() ) );
   unsigned nderivatives=getNumberOfProperties();  
 
   // Where in the low dimensional grid are we integrating

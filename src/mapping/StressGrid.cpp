@@ -29,6 +29,7 @@ namespace mapping {
 class StressGrid : public vesselbase::FieldGridBase {
 private:
   bool firsttime;
+  std::vector<double> stash;
   Mapping* map;
 public:
   static void registerKeywords( Keywords& keys );
@@ -72,6 +73,7 @@ firsttime(true)
       }
   } 
   finishSetup( names.size()-nprop , names );
+  stash.resize( getSizeOfBuffer() );
 }
 
 std::string StressGrid::description(){
@@ -79,7 +81,9 @@ std::string StressGrid::description(){
 }
 
 void StressGrid::prepare(){
-  setBufferFromStash();
+  if(firsttime) return ; 
+  unsigned stride=comm.Get_size(); unsigned rank=comm.Get_rank();
+  unsigned n=0; for(unsigned i=rank;i<getSizeOfBuffer();i+=stride){ addToBufferElement( i, stash[n]); n++; }
 }
 
 bool StressGrid::calculate(){
@@ -109,7 +113,8 @@ bool StressGrid::calculate(){
 
 void StressGrid::finish(){
   // Store what is currently in the buffers
-  stashBuffers(); 
+  unsigned stride=comm.Get_size(); unsigned rank=comm.Get_rank();
+  unsigned n=0; for(unsigned i=rank;i<getSizeOfBuffer();i+=stride){ stash[n]=getBufferElement(i); n++; }
   firsttime=false;
 }
 
