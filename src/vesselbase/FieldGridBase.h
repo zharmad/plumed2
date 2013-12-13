@@ -44,7 +44,7 @@ public:
 /// The constructor
   FieldGridBase( const VesselOptions& );
 /// Resize the field
-  void resize();
+  virtual void resize();
 /// Apply some forces to the field
   bool applyForce(std::vector<double>&);
 /// Set the forces on the quantities underlying the fields

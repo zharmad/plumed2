@@ -41,11 +41,12 @@ GridVesselBase(da)
   std::vector<std::string> names(dimension+1); 
   for(unsigned i=0;i<dimension;++i) names[i]="x";  // This needs to be better
   names[dimension]=getAction()->getLabel();
-  finishSetup( 1, names );
+  std::vector<bool> mypbc( dimension, false );
+  finishSetup( 1, mypbc, names );
 }
 
 std::string FunctionOnGrid::description(){
-  return "non interpolatable grid";
+  return getGridDescription();
 }
 
 void FunctionOnGrid::addFunctionToWholeGrid( const std::vector<double>& newf ){

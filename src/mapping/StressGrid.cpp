@@ -36,6 +36,7 @@ public:
   static void reserveKeyword( Keywords& keys );
   StressGrid( const vesselbase::VesselOptions& );
   std::string description();
+  void resize();
   void prepare();
   bool calculate();
   void finish();
@@ -72,8 +73,8 @@ firsttime(true)
           names[k]="d2chi2_" + map->getArgumentName(j) + "_" + map->getPropertyName( i ); k++; 
       }
   } 
-  finishSetup( names.size()-nprop , names );
-  stash.resize( getSizeOfBuffer() );
+  std::vector<bool> mypbc( dimension, false );
+  finishSetup( names.size()-nprop , mypbc, names );
 }
 
 std::string StressGrid::description(){
@@ -84,6 +85,11 @@ void StressGrid::prepare(){
   if(firsttime) return ; 
   unsigned stride=comm.Get_size(); unsigned rank=comm.Get_rank();
   unsigned n=0; for(unsigned i=rank;i<getSizeOfBuffer();i+=stride){ addToBufferElement( i, stash[n]); n++; }
+}
+
+void StressGrid::resize(){
+  vesselbase::FieldGridBase::resize();
+  stash.resize( getSizeOfBuffer() );
 }
 
 bool StressGrid::calculate(){
