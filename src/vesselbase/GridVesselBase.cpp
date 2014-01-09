@@ -62,7 +62,7 @@ void GridVesselBase::finishSetup( const unsigned& nelem, const std::vector<bool>
       Tools::convert( str_max[i], max[i] );
       dx[i] = ( max[i] - min[i] ) / static_cast<double>( nbin[i] );
       if( !pbc[i] ){ max[i] +=dx[i]; nbin[i]+=1; }  
-      stride[dimension-1-i]=npoints;
+      stride[i]=npoints;
       npoints*=nbin[i]; 
   }   
   for(unsigned i=0;i<(nper+dimension);++i) arg_names[i]=names[i];
@@ -126,30 +126,26 @@ void GridVesselBase::getGridPointCoordinates( const unsigned& ipoint , std::vect
 
 unsigned GridVesselBase::getLocationOnGrid( const std::vector<double>& x, std::vector<double>& dd ){
   plumed_dbg_assert( x.size()==dimension && dd.size()==dimension );
-  unsigned jold, ccf_box, bnew=0; double bb; 
+  getIndices( bold, tmp_indices ); bool changebox=false;
   for(unsigned i=0;i<dimension;++i){
-     jold=static_cast<int>( std::floor( double(bold)/double(stride[i]) ) );
-     bold-=jold*stride[i]; bb=x[i]-min[i];
-     if ( bb<0.0 ){
+     double bb = x[i] - min[i];
+     if ( bb<0.0 || bb>dx[i]*nbin[i] ){
         getAction()->error("Extrapolation of function is not allowed");
-     } else if( bb>=jold*dx[i] && bb<(jold+1)*dx[i] ){
-        bnew+=jold*stride[i];
-        dd[i] = bb/dx[i] - static_cast<double>(jold);
-     } else {
-        ccf_box=static_cast<unsigned>( std::floor(bb/dx[i]) );
-        bnew+=ccf_box*stride[i]; 
-        dd[i] =  bb/dx[i] - static_cast<double>(ccf_box);
+     } else if( bb<tmp_indices[i]*dx[i] || bb>(tmp_indices[i]+1)*dx[i] ){
+        tmp_indices[i]=static_cast<unsigned>( std::floor(bb/dx[i]) );
+        changebox=true;
      }
-  }  
-  plumed_dbg_assert( bold==0 ); 
-  return bnew;
+     dd[i] = bb/dx[i] - static_cast<double>(tmp_indices[i]);
+  }
+  if(changebox) bold = getIndex( tmp_indices );
+  return bold;
 }
 
 void GridVesselBase::getSplineNeighbors( const unsigned& mybox, std::vector<unsigned>& mysneigh ){
   if( mysneigh.size()!=current_neigh.size() ) mysneigh.resize( current_neigh.size() );   
 
   if( bold!=mybox ){
-     std::vector<unsigned> my_indices( dimension ), tmp_indices( dimension );
+     std::vector<unsigned> my_indices( dimension );
      getIndices( mybox, my_indices );
      for(unsigned i=0;i<current_neigh.size();++i){
         unsigned tmp=i;

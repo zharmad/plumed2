@@ -52,8 +52,9 @@ private:
 public:
   static void registerKeywords( Keywords& keys );
   FieldCVs(const ActionOptions& ao);
+  ~FieldCVs();
   bool isPeriodic(){ plumed_error(); return false; }
-  unsigned getNumberOfDerivatives(){ return myf->getNumberOfBaseCVs(); }
+  unsigned getNumberOfDerivatives(){ return field_action->getNumberOfDerivatives(); }
   void performTask(){ plumed_error(); }
   void calculate();
   void calculateNumericalDerivatives( ActionWithValue* a );
@@ -103,11 +104,11 @@ myfield(NULL)
   myfield_der.resize( myf->getNumberOfBaseCVs() ); mypos.resize( myf->getDimension() );
 
   if( interpols=="cubic" ){
-     printf("  using cubically interpolated field \n");
+     log.printf("  using cubically interpolated field \n");
      myfield = vesselbase::InterpolationBase::createCubicInterpolator( myf, 0 );
      for(unsigned i=0;i<myfield_der.size();++i) myfield_der[i] = vesselbase::InterpolationBase::createCubicInterpolator( myf, i+1 );
   } else if ( interpols=="nearest" ){
-     printf("  no interpolation of field\n");
+     log.printf("  no interpolation of field\n");
      std::vector<unsigned> nbin( myf->getNbin() );
      for(unsigned i=0;i<ngrid.size();++i){
          if( nbin[i]!=ngrid[i] ){
@@ -162,6 +163,10 @@ myfield(NULL)
   getPntrToComponent(0)->resizeDerivatives( myf->getNumberOfBaseCVs() );
 }
 
+FieldCVs::~FieldCVs(){
+  delete myfield; for(unsigned i=0;i<myfield_der.size();++i) delete myfield_der[i];
+}
+
 void FieldCVs::calculate(){
   if( checkNumericalDerivatives() ) field_action->calculate();
   double norm=0.0, bias=0.0; unsigned rank, stride;
@@ -179,6 +184,7 @@ void FieldCVs::calculate(){
   // Calculate the bias
   for(unsigned i=rank;i<mybias->getNumberOfPoints();i+=stride){
       mybias->getGridPointCoordinates( i, mypos );
+      plumed_dbg_assert( myfield->getFunctionValue( mypos )>0 );
       double myspot = exp( -i2sigma2*myfield->getFunctionValue( mypos ) );
       norm += myspot; bias += myspot * ( mybias->getGridElement( i , 0 ) ); 
   }
@@ -225,10 +231,7 @@ void FieldCVs::update(){
 
       // Well tempering 
       double rescalf = ( height / norm )*exp(-bias/(plumed.getAtoms().getKBoltzmann()*temp*(biasfact-1.0)));
-      for(unsigned i=0;i<stress.size();++i) stress[i] *= rescalf; 
-
-      // Actually add funciton to Grid
-      mybias->addFunctionToWholeGrid( stress );
+      for(unsigned i=0;i<stress.size();++i) mybias->addToGridElement( i, stress[i]*rescalf ); 
   }
   if(isFirstStep) isFirstStep=false;
 }

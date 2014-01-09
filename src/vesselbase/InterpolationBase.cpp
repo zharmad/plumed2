@@ -59,6 +59,10 @@ unsigned InterpolationBase::getGridStride( const unsigned& i ) const {
   return mygrid->stride[i];
 }
 
+unsigned InterpolationBase::getBoxIndex( const std::vector<unsigned>& pn ) const {
+  return mygrid->getIndex( pn );
+}
+
 double InterpolationBase::getValue( const std::vector<unsigned>& pn ){
   unsigned mybox = mygrid->getIndex( pn );
   return mygrid->getGridElement( mybox, data );

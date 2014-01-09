@@ -50,6 +50,8 @@ protected:
   void getGridPointSpacing( std::vector<double>& spacing ) const ;
 /// Get number of grid points along each axis
   void getNumberOfGridPoints( std::vector<unsigned>& bin ) const ;
+/// Get the index for a particular numbered cell
+  unsigned getBoxIndex( const std::vector<unsigned>& pn  ) const ;
 /// Return the number of points between adjacent grid points
   unsigned getGridStride( const unsigned& i ) const ;
 /// Get the value on the grid at a particular point labelled using numerical sequence

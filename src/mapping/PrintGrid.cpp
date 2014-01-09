@@ -72,7 +72,7 @@ ActionPilot(ao)
 
   parse("FILE",filen); parse("FMT",fmt);
   if( filen.length()==0 ) error("file name for output has no characters");
-  log.printf("  printing grid to file named %s with format %f \n",filen.c_str(), fmt.c_str() );
+  log.printf("  printing grid to file named %s with format %s \n",filen.c_str(), fmt.c_str() );
   checkRead();
 }
 

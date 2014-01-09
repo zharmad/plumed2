@@ -307,6 +307,8 @@ void ActionWithVessel::finishComputations(){
 
 void ActionWithVessel::chainRuleForElementDerivatives( const unsigned& iout, const unsigned& ider, const double& df, Vessel* valout ){
   current_buffer_stride=1;
+  // Factor of 1 added here is so that we are not adding to the value which is stored in the first
+  // element of the buffer.
   current_buffer_start=valout->bufstart + (getNumberOfDerivatives()+1)*iout + 1;
   mergeDerivatives( ider, df );
 } 
@@ -315,6 +317,8 @@ void ActionWithVessel::chainRuleForElementDerivatives( const unsigned& iout, con
                                                        const unsigned& off, const double& df, Vessel* valout ){
   plumed_dbg_assert( off<stride );
   current_buffer_stride=stride;
+  // Factor of stride added here is so that we are not adding to the value which is stored in the first
+  // element of the buffer.
   current_buffer_start=valout->bufstart + stride*(getNumberOfDerivatives()+1)*iout + stride + off;
   mergeDerivatives( ider, df );
 }

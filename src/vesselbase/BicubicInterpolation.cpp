@@ -80,7 +80,7 @@ void BicubicInterpolation::setInterpolationTables(){
          np[0]=i; np[1]=j+1; y[3]=getValueAndDerivatives( np, der ); dy1[3]=der[0]; dy2[3]=der[1]; d2y12[3] = dcross( i, j+1 );
          IBicCoeff( y, dy1, dy2, d2y12, d1, d2, tc);
 
-         pij=( i*dcross.nrows()+j )*16;
+         np[0]=i; np[1]=j; pij=16*getBoxIndex( np ); 
          for(unsigned k=0; k<4; ++k){ for(unsigned n=0; n<4; ++n){ clist[pij++]=tc(k,n); } }
       }
   }
@@ -99,13 +99,9 @@ double BicubicInterpolation::interpolateFunction( const unsigned& mybox, const s
 
   double t=dd[0], u=dd[1];
   //faster access by pointer arithmetic (dirty dirty dirty) 
-  double *cbase=&clist[(mybox+1)*16-1], *c3, *c2, *c1, *c0;
-//  unsigned ibase=(mybox+1)*16-1, i3, i2, i1, i0;
-  double f=0.;
+  double *cbase=&clist[(mybox+1)*16-1], *c3, *c2, *c1, *c0; double f=0.;
   for (int i=3; i>=0; i--) {    // Note to self - this has to be an int as unsigned cannot be less than zero - duh!!
       c3=cbase; c2=c3-1; c1=c2-1; c0=c1-1; cbase=c0-1;
-//      i3=ibase; i2=i3-1; i1=i2-1; i0=i1-1; ibase=i0-1;
-//      printf("INTERPOLATE %p %p %p %p %p %d %d %d %d %d \n",cbase,c3,c2,c1,c0,ibase,i3,i2,i1,i0); 
       f = t*f + ( ( (*c3)*u + (*c2) )*u + (*c1) )*u + (*c0);
   }
   return f;

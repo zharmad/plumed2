@@ -61,13 +61,15 @@ firsttime(true)
 
   unsigned nprop = map->getNumberOfProperties(); 
   unsigned nargs = map->getNumberOfArguments(); 
+  if( map->getNumberOfAtoms()>0 ) nargs += 9 + 3*map->getNumberOfAtoms();
+
   unsigned ntot = nprop + 1 + nprop + nargs + nargs*nprop;
   std::vector<std::string> names( ntot ); unsigned k=0;
   for(unsigned i=0;i<nprop;++i){ names[k]=map->getPropertyName( i ); k++; } 
   names[k]="chi2"; k++;
   for(unsigned i=0;i<nprop;++i){ names[k]="dchi2_" + map->getPropertyName( i ); k++; }
 
-  for(unsigned j=0;j<map->getNumberOfDerivatives();++j){
+  for(unsigned j=0;j<nargs;++j){
       names[k]="dchi2_" + map->getArgumentName(j); k++;
       for(unsigned i=0;i<nprop;++i){
           names[k]="d2chi2_" + map->getArgumentName(j) + "_" + map->getPropertyName( i ); k++; 
@@ -110,10 +112,10 @@ bool StressGrid::calculate(){
   highdv = map->getCurrentHighDimFunctionValue( 1 );
   // And compute the stress
   tmp = highdv - lowdv;
-  chi2 = weight*tmp*tmp;
+  double ochi2 = weight*tmp*tmp;
 
   // And remove everything from the field stress
-  accumulate( -chi2, 2.*weight*tmp, -2.*weight*tmp, 2.*weight, 1 ); 
+  accumulate( -ochi2, 2.*weight*tmp, -2.*weight*tmp, 2.*weight, 1 ); 
   return true;
 }
 
