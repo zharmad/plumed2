@@ -23,18 +23,18 @@
 #include "core/PlumedMain.h"
 #include "core/ActionSet.h"
 #include "core/ActionRegister.h"
-#include "vesselbase/ActionWithVessel.h"
-#include "vesselbase/GridVesselBase.h"
+#include "ActionWithVessel.h"
+#include "GridVesselBase.h"
 
 namespace PLMD {
-namespace sketchmap {
+namespace vesselbase {
 
 class PrintGrid :
   public ActionPilot
 {
 private:
 /// Pointer to the grid we are printing
-  vesselbase::GridVesselBase* mygrid;
+  GridVesselBase* mygrid;
 /// The name of the file we are printing to
   std::string filen;
 /// The format to use for real numbers
@@ -63,11 +63,11 @@ Action(ao),
 ActionPilot(ao)
 {
   std::string mylab; parse("ARG",mylab);
-  vesselbase::ActionWithVessel* action=plumed.getActionSet().selectWithLabel<vesselbase::ActionWithVessel*>(mylab);
+  ActionWithVessel* action=plumed.getActionSet().selectWithLabel<ActionWithVessel*>(mylab);
   if(!action) error(mylab + " action does not exist");
   addDependency(action);
 
-  mygrid = dynamic_cast<vesselbase::GridVesselBase*>( action->getVesselWithName("GRID") );
+  mygrid = dynamic_cast<GridVesselBase*>( action->getVesselWithName("GRID") );
   if(!mygrid ) error(mylab + " is not an action that calculates a grid");
 
   parse("FILE",filen); parse("FMT",fmt);
