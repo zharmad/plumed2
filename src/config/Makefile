@@ -3,13 +3,15 @@
 -include ../../Makefile.conf
 
 # default target
-.PHONY: all
+.PHONY: all obj
 all:
 	@echo "Updating ConfigInstall.cpp"
 	@sed "s/@SOEXT@/$(SOEXT)/g" Config.cpp.in | \
          sed "s/@ISINSTALLED@/true/g" | \
-	 ../maketools/update-plumedroot.sh ConfigInstall.cpp
+	env prefix="${prefix}" ../maketools/update-plumedroot.sh ConfigInstall.cpp
 	$(MAKE) do-all
+
+obj: all
 
 do-all: Config.o ConfigInstall.o compile_options.sh 
 	make ConfigInstall.o
@@ -40,7 +42,7 @@ Makefile.conf.xxd: ../../Makefile.conf
 # file to import compilation options inside a bash script
 compile_options.sh:
 	@echo Building compile_options.sh, a sourceable bash script with some compilation options
-	@echo "compile=\""$(CXX) -c -I\"\$$PLUMED_ROOT\"/src $(CPPFLAGS) $(CXXFLAGS) -o"\"" > $@
+	@echo "compile='"$(CXX) -c -I'$$PLUMED_ROOT'/src $(CPPFLAGS) $(CXXFLAGS) -o"'" > $@
 	@echo "link='"$(LDSO) -o"'" >> $@
 	@echo "soext='"$(SOEXT)"'" >> $@
 

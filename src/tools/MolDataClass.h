@@ -4,7 +4,7 @@
 
    See http://www.plumed-code.org for more information.
 
-   This file is part of plumed, version 2.0.
+   This file is part of plumed, version 2.
 
    plumed is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as published by
@@ -43,7 +43,7 @@ public:
   static void getBackboneForResidue( const std::string& type, const unsigned& residuenum, const PDB& mypdb, std::vector<AtomNumber>& atoms ); 
 /// Return true if the residue is a terminal group e.g. ACE, NME for proteins
   static bool isTerminalGroup( const std::string& type, const std::string& residuename );
-/// Used to interpret special symbols - currently phi and psi
+/// Used to interpret special symbols - currently phi and psi and omega
   static void specialSymbol( const std::string& type, const std::string& symbol, const PDB& mypdb, std::vector<AtomNumber>& numbers );
 };
 

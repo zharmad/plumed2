@@ -23,8 +23,10 @@ CPP_SRC=$(wildcard *.cpp)
 ALL_DEP=$(addprefix deps/,$(CPP_SRC:.cpp=.d))
 
 # default target
-.PHONY: all
+.PHONY: all obj
 all: $(OBJ_WRAPPER) $(OBJ_DYNAMIC_WRAPPER)
+
+obj: all
 
 links:
 	@echo Nothing to do in $(CURDIR)
@@ -41,7 +43,7 @@ else
 .PHONY: error
 error:
 	@echo No configuration available
-	@echo First run ./configure.sh in the root directory
+	@echo First run ./configure in the root directory
 endif
 
 # this target is available anyway

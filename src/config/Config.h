@@ -43,6 +43,10 @@ bool isInstalled();
 
 bool hasCregex();
 
+bool hasMolfile();
+
+bool hasZlib();
+
 }
 }
 

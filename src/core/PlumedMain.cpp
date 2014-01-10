@@ -277,7 +277,7 @@ void PlumedMain::cmd(const std::string & word,void*val){
   } else if(word=="setLogFile"){
        CHECK_NOTINIT(initialized,word);
        CHECK_NULL(val,word);
-       log.open(static_cast<char*>(val),"w");
+       log.open(static_cast<char*>(val));
 // other commands that should be used after initialization:
   } else if(word=="setStopFlag"){
        CHECK_INIT(initialized,word);
@@ -694,7 +694,7 @@ void PlumedMain::writeCheckPointFile(){
   if(ff) rename("plumed_state.itp","plumed_prev_state.itp");
 
   // Write everything to checkpoint file
-  OFile cfile; cfile.link(*this); cfile.open("plumed_state.itp","w+");
+  OFile cfile; cfile.link(*this); cfile.open("plumed_state.itp");
   for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
       (*p)->dumpCheckPointFile( cfile ); 
   }
