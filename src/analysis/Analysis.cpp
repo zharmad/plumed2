@@ -250,7 +250,7 @@ void Analysis::calculate(){
   // Don't store the first step (also don't store if we are getting data from elsewhere)
   if( getStep()==0 || reusing_data ) return;
   // This is used when we have a full quota of data from the first run
-  if( idata==logweights.size() ) return; 
+  if( !single_run && idata==logweights.size() ) return; 
 
   // Retrieve the bias
   double bias=0.0; for(unsigned i=0;i<biases.size();++i) bias+=biases[i]->get();
@@ -279,7 +279,12 @@ void Analysis::calculate(){
      logweights[idata] = ww; 
   }
   // Write data to checkpoint file
-  if( write_chq ) data[idata]->print( rfile, getTime(), logweights[idata], old_norm );
+  if( write_chq ) {
+  // close the restart file so it is flushed
+      rfile.rewind();
+      data[idata]->print( rfile, getTime(), logweights[idata], old_norm );
+      rfile.flush();
+  }
   // Increment data counter
   idata++;
 }
@@ -355,12 +360,6 @@ void Analysis::getDataPoint( const unsigned& idata, std::vector<double>& point, 
 }
 
 void Analysis::runAnalysis(){
-
-  // close the restart file so it is flushed
-  if( write_chq ){
-    rfile.flush();
-    rfile.rewind();
-  }
 
   // Note : could add multiple walkers here - simply read in the data from all
   // other walkers here if we are writing the check points.
