@@ -388,14 +388,17 @@ void PlumedMain::readInputFile(std::string str){
   while(Tools::getParsedLine(ifile,words) && words[0]!="ENDPLUMED") readInputWords(words);
   log.printf("END FILE: %s\n",str.c_str());
   log.flush();
-  // Read in checkpoint file
+  // Setup checkpoint file
+  cfile.link(*this); cfile.open("plumed_state.itp"); firstcheckdone=false;
+  // Read in checkpoint file for restart
   if( getRestart() ){
       IFile cifile; cifile.link(*this); cifile.open("plumed_state.itp");
       for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
           (*p)->restartFromCheckPointFile( cifile );
       }
       cifile.close();
-  }
+      firstcheckdone=true; // This ensures old restart file is backed up
+  } 
   log.flush();	
 
   pilots=actionSet.select<ActionPilot*>();
@@ -689,16 +692,16 @@ void PlumedMain::runJobsAtEndOfCalculation(){
 }
 
 void PlumedMain::writeCheckPointFile(){
-  // Backup previous checkpoint file
-  FILE* ff = std::fopen("plumed_state.itp","r");
-  if(ff) rename("plumed_state.itp","plumed_prev_state.itp");
+  // Rewind auomatically backs up previous check point files
+  if(firstcheckdone) cfile.rewind();
 
   // Write everything to checkpoint file
-  OFile cfile; cfile.link(*this); cfile.open("plumed_state.itp");
   for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
       (*p)->dumpCheckPointFile( cfile ); 
   }
-  cfile.close();
+  firstcheckdone=true;
+  // Flush the checkpoint file
+  cfile.flush();
 } 
 
 }

@@ -23,6 +23,7 @@
 #define __PLUMED_core_PlumedMain_h
 
 #include "WithCmd.h"
+#include "tools/OFile.h"
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -134,6 +135,10 @@ private:
 /// Stuff to make plumed stop the MD code cleanly
   int* stopFlag;
   bool stopNow;
+
+/// Stuff for checkpoint files
+  OFile cfile;
+  bool firstcheckdone;
 
 public:
 /// Flag to switch off virial calculation (for debug and MD codes with no barostat)
