@@ -184,7 +184,6 @@ void FieldCVs::calculate(){
   // Calculate the bias
   for(unsigned i=rank;i<mybias->getNumberOfPoints();i+=stride){
       mybias->getGridPointCoordinates( i, mypos );
-      plumed_dbg_assert( myfield->getFunctionValue( mypos )>0 );
       double myspot = exp( -i2sigma2*myfield->getFunctionValue( mypos ) );
       norm += myspot; bias += myspot * ( mybias->getGridElement( i , 0 ) ); 
   }

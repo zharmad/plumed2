@@ -84,6 +84,8 @@ std::string StressGrid::description(){
 }
 
 void StressGrid::prepare(){
+  clearForces();
+
   if(firsttime) return ; 
   unsigned stride=comm.Get_size(); unsigned rank=comm.Get_rank();
   unsigned n=0; for(unsigned i=rank;i<getSizeOfBuffer();i+=stride){ addToBufferElement( i, stash[n]); n++; }
