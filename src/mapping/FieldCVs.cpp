@@ -224,9 +224,9 @@ void FieldCVs::update(){
          stress[i] = exp( -i2sigma2*myfield->getFunctionValue( mypos ) ); 
          norm += stress[i]; bias += stress[i]*mybias->getGridElement( i , 0 );
       }
-      norm *= mybias->getCellVolume(); 
+      norm *= mybias->getCellVolume(); comm.Sum( norm );
       bias *= mybias->getCellVolume() / norm;
-      comm.Sum( norm ); comm.Sum( bias ); comm.Sum( stress );
+      comm.Sum( bias ); comm.Sum( stress );
 
       // Well tempering 
       double rescalf = ( height / norm )*exp(-bias/(plumed.getAtoms().getKBoltzmann()*temp*(biasfact-1.0)));
