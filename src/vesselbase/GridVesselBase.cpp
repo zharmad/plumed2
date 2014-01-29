@@ -34,6 +34,10 @@ void GridVesselBase::registerKeywords( Keywords& keys ){
 
 GridVesselBase::GridVesselBase( const VesselOptions& da ):
 Vessel(da),
+interpolating(false),
+bold(0),
+dataHasChangedSinceInterpol(true),
+checkpoint(false),
 nper(0)
 {
   if( getName().find("GRID")==std::string::npos ){
@@ -43,51 +47,26 @@ nper(0)
   str_max.resize( dimension ); nbin.resize( dimension );
   parseVector("MAX",str_max); parseVector("NBIN",nbin);
   tmp_indices.resize( str_min.size() );
+  current_neigh.resize( static_cast<unsigned>(pow(2.,dimension)) );
 }
 
-void GridVesselBase::finishSetup( const unsigned& nelem, const std::vector<std::string>& names ){
+void GridVesselBase::finishSetup( const unsigned& nelem, const std::vector<bool>& ipbc, const std::vector<std::string>& names ){
   nper=nelem; dimension=str_min.size();
+  plumed_massert( ipbc.size()==dimension, "size of pbc vector does not match number of dimensions" );
   plumed_massert( names.size()==nper+dimension, "number of field names does not match number of elements per node"); 
 
-  npoints=1; dx.resize( dimension ); min.resize( dimension ); 
+  npoints=1; dx.resize( dimension ); min.resize( dimension ); stride.resize( dimension );
   max.resize( dimension ); pbc.resize( dimension ); arg_names.resize( nper + dimension );
   for(unsigned i=0;i<dimension;++i){
+      pbc[i]=ipbc[i];
       Tools::convert( str_min[i], min[i] ); 
       Tools::convert( str_max[i], max[i] );
       dx[i] = ( max[i] - min[i] ) / static_cast<double>( nbin[i] );
-      max[i] +=dx[i]; nbin[i]+=1; pbc[i]=false; 
+      if( !pbc[i] ){ max[i] +=dx[i]; nbin[i]+=1; }  
+      stride[i]=npoints;
       npoints*=nbin[i]; 
   }   
   for(unsigned i=0;i<(nper+dimension);++i) arg_names[i]=names[i];
-}
-
-void GridVesselBase::finishSetup( const std::vector<Value*>& arguments, const std::string& funcname, const bool usederiv ){
-  plumed_massert( arguments.size()!=str_min.size(), "number of arguments does not match size of min and max arrays");
-
-  dimension=str_min.size();
-  if( usederiv ) nper=1+arguments.size();
-  else nper=1;
-
-  npoints=1; dx.resize( dimension ); min.resize( dimension ); 
-  max.resize( dimension ); pbc.resize( dimension ); arg_names.resize( nper + dimension );
-  for(unsigned i=0;i<dimension;++i){
-      arg_names[i]=arguments[i]->getName();
-      if( arguments[i]->isPeriodic() ){
-          pbc[i]=true;
-          arguments[i]->getDomain( str_min[i], str_max[i] );
-      }  else {
-          pbc[i]=false;
-      }
-      Tools::convert( str_min[i], min[i] ); 
-      Tools::convert( str_max[i], max[i] );
-      dx[i] = ( max[i] - min[i] ) / static_cast<double>( nbin[i] );
-      if( !pbc[i] ){ max[i] += dx[i]; nbin[i] +=1; }
-      npoints*=nbin[i];
-  }
-  arg_names[dimension]=funcname;
-  if( usederiv ){
-      for(unsigned i=0;i<dimension;++i) arg_names[dimension+i]="der_"+arguments[i]->getName();
-  }
 }
 
 std::string GridVesselBase::getGridDescription() const {
@@ -139,11 +118,49 @@ void GridVesselBase::getGridPointCoordinates( const unsigned& ipoint , std::vect
   for(unsigned i=0;i<dimension;++i) x[i] = min[i] + dx[i]*tmp_indices[i];
 }
 
-void GridVesselBase::getIndices(const std::vector<double>& x, std::vector<unsigned>& indices) const {
-  plumed_dbg_assert(x.size()==dimension && indices.size()==dimension);
-  for(unsigned int i=0;i<dimension;++i){
-    indices[i]=static_cast<unsigned>(std::floor((x[i]-min[i])/dx[i]));
+// void GridVesselBase::getIndices(const std::vector<double>& x, std::vector<unsigned>& indices) const {
+//   plumed_dbg_assert(x.size()==dimension && indices.size()==dimension);
+//   for(unsigned int i=0;i<dimension;++i){
+//     indices[i]=static_cast<unsigned>(std::floor((x[i]-min[i])/dx[i]));
+//   }
+// }
+
+unsigned GridVesselBase::getLocationOnGrid( const std::vector<double>& x, std::vector<double>& dd ){
+  plumed_dbg_assert( x.size()==dimension && dd.size()==dimension );
+  getIndices( bold, tmp_indices ); bool changebox=false;
+  for(unsigned i=0;i<dimension;++i){
+     double bb = x[i] - min[i];
+     if ( bb<0.0 || bb>dx[i]*nbin[i] ){
+        getAction()->error("Extrapolation of function is not allowed");
+     } else if( bb<tmp_indices[i]*dx[i] || bb>(tmp_indices[i]+1)*dx[i] ){
+        tmp_indices[i]=static_cast<unsigned>( std::floor(bb/dx[i]) );
+        changebox=true;
+     }
+     dd[i] = bb/dx[i] - static_cast<double>(tmp_indices[i]);
   }
+  if(changebox) bold = getIndex( tmp_indices );
+  return bold;
+}
+
+void GridVesselBase::getSplineNeighbors( const unsigned& mybox, std::vector<unsigned>& mysneigh ){
+  if( mysneigh.size()!=current_neigh.size() ) mysneigh.resize( current_neigh.size() );   
+
+  if( bold!=mybox ){
+     std::vector<unsigned> my_indices( dimension );
+     getIndices( mybox, my_indices );
+     for(unsigned i=0;i<current_neigh.size();++i){
+        unsigned tmp=i;
+        for(unsigned j=0;j<dimension;++j){
+           unsigned i0=tmp%2+my_indices[j]; tmp/=2;
+           if(!pbc[j] && i0==nbin[j]) getAction()->error("Extrapolating function on grid");
+           if( pbc[j] && i0==nbin[j]) i0=0;
+           tmp_indices[j]=i0;
+        }
+        current_neigh[i]=getIndex( tmp_indices );
+     }
+     bold=mybox;
+  }
+  for(unsigned i=0;i<current_neigh.size();++i) mysneigh[i]=current_neigh[i];
 }
 
 double GridVesselBase::getGridElement( const unsigned& ipoint, const unsigned& jelement ) const {
@@ -153,12 +170,12 @@ double GridVesselBase::getGridElement( const unsigned& ipoint, const unsigned& j
 
 void GridVesselBase::setGridElement( const unsigned& ipoint, const unsigned& jelement, const double& value ){
   plumed_dbg_assert( ipoint<npoints && jelement<nper );
-  setBufferElement( nper*ipoint + jelement, value );
+  dataHasChangedSinceInterpol=true; setBufferElement( nper*ipoint + jelement, value );
 }
 
 void GridVesselBase::addToGridElement( const unsigned& ipoint, const unsigned& jelement, const double& value ){
   plumed_dbg_assert( ipoint<npoints && jelement<nper );
-  addToBufferElement( nper*ipoint + jelement, value );
+  dataHasChangedSinceInterpol=true; addToBufferElement( nper*ipoint + jelement, value );
 }
 
 double GridVesselBase::getGridElement( const std::vector<unsigned>& indices, const unsigned& jelement ) const {
@@ -171,6 +188,28 @@ void GridVesselBase::setGridElement( const std::vector<unsigned>& indices, const
 
 void GridVesselBase::addToGridElement( const std::vector<unsigned>& indices, const unsigned& jelement, const double& value ){
   addToGridElement( getIndex( indices ), jelement, value );
+}
+
+std::string GridVesselBase::getQuantityDescription( const unsigned& icv ) const {
+  plumed_assert( icv<arg_names.size() );
+  return arg_names[icv];
+}
+
+std::vector<std::string> GridVesselBase::getMin() const {
+  return str_min;
+}
+  
+std::vector<std::string> GridVesselBase::getMax() const {
+  return str_max;
+}
+
+std::vector<unsigned> GridVesselBase::getNbin() const {
+  std::vector<unsigned> ngrid( dimension );
+  for(unsigned i=0;i<dimension;++i){
+      if( !pbc[i] ) ngrid[i]=nbin[i] - 1;
+      else ngrid[i]=nbin[i];
+  }
+  return ngrid;
 }
 
 void GridVesselBase::writeToFile( OFile& ofile, const std::string& fmt ){
@@ -198,6 +237,47 @@ void GridVesselBase::writeToFile( OFile& ofile, const std::string& fmt ){
    for(unsigned j=0;j<nper;++j){ ofile.fmtField(" "+fmt); ofile.printField( arg_names[dimension + j], getGridElement(i,j) ); }
    ofile.printField();
  }
+}
+
+void GridVesselBase::storeInCheckpoint(){
+  checkpoint=true;
+}
+
+void GridVesselBase::writeToCheckpoint( OFile& cfile ){
+  if(!checkpoint) return;
+  cfile.printf("BEGIN VESSEL: TYPE=%s NAME=%s BUFSIZE=%d \n",getName().c_str(),getLabel().c_str(), getSizeOfBuffer() );
+  for(unsigned i=0;i<getSizeOfBuffer();++i) cfile.printf("%f \n", getBufferElement(i) );
+  cfile.printf("END VESSEL: TYPE=%s NAME=%s \n",getName().c_str(),getLabel().c_str() );
+}
+
+void GridVesselBase::readFromCheckpoint( IFile& cifile ){
+  if(!checkpoint) return;
+  // Check first line
+  std::vector<std::string> words; Tools::getParsedLine(cifile,words);
+  if( words[0]!="BEGIN" && words[1]!="VESSEL:" ) getAction()->error("failed to read in checkpoint file correctly");
+  
+  // Checks on first line
+  std::string vtype; Tools::parse(words, "TYPE" , vtype );
+  if( vtype!=getName() ) getAction()->error("mismatch for vessel type in checkpoint file");
+  std::string vlab; Tools::parse(words, "NAME", vlab );
+  if( vlab!=getLabel() ) getAction()->error("mismatch for vessel name in checkpoint file");
+  unsigned bsize; Tools::parse(words, "BUFSIZE", bsize );
+  if( bsize!=getSizeOfBuffer() ) getAction()->error("mismatch for size of buffer in checkpoint file");
+  
+  // Now read the buffer
+  double num; 
+  for(unsigned i=0;i<getSizeOfBuffer();++i){
+     Tools::getParsedLine(cifile,words); Tools::convert( words[0], num );
+     setBufferElement(i, num );
+  }
+
+  // Check last line
+  Tools::getParsedLine(cifile,words);
+  if( words[0]!="END" && words[1]!="VESSEL:" ) getAction()->error("bad data in checkpoint file");
+  Tools::parse(words, "TYPE" , vtype );
+  if( vtype!=getName() ) getAction()->error("mismatch for vessel type in finish of checkpoint file");
+  Tools::parse(words, "NAME", vlab );
+  if( vlab!=getLabel() ) getAction()->error("mismatch for vessel name in finish of checkpoint file");
 }
 
 }

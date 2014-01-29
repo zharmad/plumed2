@@ -22,6 +22,7 @@
 #include "ActionAtomistic.h"
 #include "PlumedMain.h"
 #include "ActionSet.h"
+#include "SetupMolInfo.h"
 #include <vector>
 #include <string>
 #include "ActionWithValue.h"
@@ -50,7 +51,6 @@ donotforce(false),
 atoms(plumed.getAtoms())
 {
   atoms.add(this);
-  if(atoms.getNatoms()==0) error("Cannot perform calculations involving atoms without atoms");
 }
 
 void ActionAtomistic::registerKeywords( Keywords& keys ){
@@ -108,7 +108,7 @@ void ActionAtomistic::calculateAtomicNumericalDerivatives( ActionWithValue* a, c
     positions[i][k]=positions[i][k]+delta;
     a->calculate();
     positions[i][k]=savedPositions[i][k];
-    for(unsigned j=0;j<nval;j++){
+    for(int j=0;j<nval;j++){
       value[j*natoms+i][k]=a->getOutputQuantity(j);
     }
   }
@@ -122,12 +122,12 @@ void ActionAtomistic::calculateAtomicNumericalDerivatives( ActionWithValue* a, c
    box(i,k)=arg0;
    pbc.setBox(box);
    for(int j=0;j<natoms;j++) positions[j]=savedPositions[j];
-   for(unsigned j=0;j<nval;j++) valuebox[j](i,k)=a->getOutputQuantity(j);
+   for(int j=0;j<nval;j++) valuebox[j](i,k)=a->getOutputQuantity(j);
  }
 
   a->calculate();
   a->clearDerivatives();
-  for(unsigned j=0;j<nval;j++){
+  for(int j=0;j<nval;j++){
     Value* v=a->copyOutput(j);
     double ref=v->get();
     if(v->hasDerivatives()){
@@ -150,6 +150,8 @@ void ActionAtomistic::parseAtomList(const std::string&key, std::vector<AtomNumbe
 
 void ActionAtomistic::parseAtomList(const std::string&key,const int num, std::vector<AtomNumber> &t){
   plumed_massert( keywords.style(key,"atoms"), "keyword " + key + " should be registered as atoms");
+  if(atoms.getNatoms()==0) error("Cannot perform calculations involving atoms without atoms");
+
   vector<string> strings;
   if( num<0 ){
       parseVector(key,strings);
@@ -164,6 +166,18 @@ void ActionAtomistic::parseAtomList(const std::string&key,const int num, std::ve
    AtomNumber atom;
    ok=Tools::convert(strings[i],atom); // this is converting strings to AtomNumbers
    if(ok) t.push_back(atom);
+// here we check if this is a special symbol for MOLINFO
+   if( !ok && strings[i].compare(0,1,"@")==0 ){
+      std::size_t dot=strings[i].find_first_of("@"); std::string symbol=strings[i].substr(dot+1);
+      vector<SetupMolInfo*> moldat=plumed.getActionSet().select<SetupMolInfo*>();
+      if( moldat.size()>0 ){
+          vector<AtomNumber> atom_list; moldat[0]->interpretSymbol( symbol, atom_list );
+          if( atom_list.size()>0 ){ ok=true; t.insert(t.end(),atom_list.begin(),atom_list.end()); }
+          else { error(strings[i] + " is not a label plumed knows"); }
+      } else {
+          error("atoms specified using @ symbol but no MOLINFO was available");
+      }
+   }
 // here we check if the atom name is the name of a group
    if(!ok){
      if(atoms.groups.count(strings[i])){
@@ -184,7 +198,8 @@ void ActionAtomistic::parseAtomList(const std::string&key,const int num, std::ve
        }
      }
    }
-   plumed_massert(ok,"it was not possible to interpret atom name " + strings[i]);
+   if(!ok) error("it was not possible to interpret atom name " + strings[i]);
+   // plumed_massert(ok,"it was not possible to interpret atom name " + strings[i]);
   }
 } 
 

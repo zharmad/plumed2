@@ -1,10 +1,10 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2012 The plumed team
+   Copyright (c) 2013 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed-code.org for more information.
 
-   This file is part of plumed, version 2.0.
+   This file is part of plumed, version 2.
 
    plumed is free software: you can redistribute it and/or modify
    it under the terms of the GNU Lesser General Public License as published by
@@ -121,7 +121,7 @@ MultiColvarFunction(ao)
 
 void NumberOfLinks::calculateWeight(){
   Vector distance = getSeparation( getPositionOfCentralAtom(0), getPositionOfCentralAtom(1) );
-  double dfunc, sw = switchingFunction.calculate( distance.modulo(), dfunc );
+  double dfunc, sw = switchingFunction.calculateSqr( distance.modulo2(), dfunc );
   addCentralAtomsDerivatives( 0, 1, (-dfunc)*distance );
   addCentralAtomsDerivatives( 1, 1, (dfunc)*distance );
   MultiColvarBase::addBoxDerivatives( 1, (-dfunc)*Tensor(distance,distance) );

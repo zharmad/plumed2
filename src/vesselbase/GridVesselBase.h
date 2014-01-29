@@ -31,9 +31,23 @@ namespace PLMD {
 namespace vesselbase {
 
 class GridVesselBase : public Vessel {
+friend class InterpolationBase;
+friend class PrintGrid;
 private:
+/// Are we interpolating this grid
+ bool interpolating;
+/// These two variables are used to 
+/// remember the box we were in on the previous call
+ unsigned bold;
 /// The number of points in the grid
  unsigned npoints;
+/// This is if we are interpolating function to ensure that 
+/// tables are updated if data is changed
+ bool dataHasChangedSinceInterpol;
+/// Remember the neighbors that were used last time
+ std::vector<unsigned> current_neigh; 
+/// Write the contents of the grid to the checkpoint file
+ bool checkpoint;
 /// The names of the various columns in the grid file
  std::vector<std::string> arg_names;
 /// The minimum and maximum in the grid stored as strings 
@@ -42,6 +56,8 @@ private:
  std::vector<double> min, max;
 /// The spacing between grid points
  std::vector<double> dx;
+/// The numerical distance between adjacent grid points
+ std::vector<unsigned> stride;
 /// The number of bins in each grid direction
  std::vector<unsigned> nbin;
 /// Is this direction periodic
@@ -63,10 +79,9 @@ protected:
 /// Get the indices fof a point
  void getIndices( const unsigned& index, std::vector<unsigned>& indices ) const ;
 /// Get the indices at which a particular point resides
- void getIndices(const std::vector<double>& x, std::vector<unsigned>& indices) const ; 
+// void getIndices(const std::vector<double>& x, std::vector<unsigned>& indices) const ; 
 
 /// Operations on one of the elements of grid point i
- double getGridElement( const unsigned&, const unsigned& ) const ; 
  void setGridElement( const unsigned&, const unsigned&, const double& );
  void addToGridElement( const unsigned&, const unsigned&, const double& );
 
@@ -74,10 +89,8 @@ protected:
  double getGridElement( const std::vector<unsigned>&, const unsigned& ) const ;
  void setGridElement( const std::vector<unsigned>&, const unsigned&, const double& );
  void addToGridElement( const std::vector<unsigned>&, const unsigned&, const double& );
-/// Finish setup of grid object when it is storing the values of a function at various argument points
-  void finishSetup( const std::vector<Value*>& arguments, const std::string& funcname, const bool usederiv=true );
 /// Finish setup of grid object when it is storing the values of a more abstract quantity
-  void finishSetup( const unsigned& nelem, const std::vector<std::string>& names );
+  void finishSetup( const unsigned& nelem, const std::vector<bool>& ipbc, const std::vector<std::string>& names );
 public:
 /// keywords
   static void registerKeywords( Keywords& keys );
@@ -89,13 +102,55 @@ public:
   unsigned getNumberOfPoints() const;
 /// Get the coordinates for a point in the grid
   void getGridPointCoordinates( const unsigned& , std::vector<double>& );
+/// Return a description of the quantity stored in a particular column of the grid
+ std::string getQuantityDescription(const unsigned& ) const;
 /// Write the grid on a file
   void writeToFile( OFile& , const std::string& fmt );
+/// Get the dimensionality of the function
+  unsigned getDimension() const ;
+/// Get the number of grid points for each dimension
+  std::vector<unsigned> getNbin() const ;
+/// Get the vector containing the minimum value of the grid in each dimension
+  std::vector<std::string> getMin() const ;
+/// Get the vector containing the maximum value of the grid in each dimension
+  std::vector<std::string> getMax() const ;
+/// Return the volume of one of the grid cells
+  double getCellVolume() const ;
+/// Get the value of the ith grid element 
+  double getGridElement( const unsigned&, const unsigned& ) const ;
+/// Get the numerical index for the box that contains a particular point
+ unsigned getLocationOnGrid( const std::vector<double>& x, std::vector<double>& dd );
+/// Get the points neighboring a particular spline point
+ void getSplineNeighbors( const unsigned& mybox, std::vector<unsigned>& mysneigh );
+/// Use grid checkpointing
+  void storeInCheckpoint();
+/// Write data to the checkpoint file
+  void writeToCheckpoint( OFile& cfile );
+/// Read data from checkpoint file
+  void readFromCheckpoint( IFile& cifile );
+/// Will the grid be interpolated
+  bool gridWillBeInterpolated() const;
 };
 
 inline
 unsigned GridVesselBase::getNumberOfPoints() const {
   return npoints;
+}
+
+inline
+double GridVesselBase::getCellVolume() const {
+  double myvol=1.0; for(unsigned i=0;i<dimension;++i) myvol *= dx[i];
+  return myvol;
+}
+
+inline
+unsigned GridVesselBase::getDimension() const {
+  return dimension;
+}
+
+inline
+bool GridVesselBase::gridWillBeInterpolated() const {
+  return interpolating;
 }
 
 }

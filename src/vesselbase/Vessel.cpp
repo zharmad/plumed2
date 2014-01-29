@@ -125,15 +125,5 @@ void Vessel::error( const std::string& msg ){
   plumed_merror("ERROR for keyword " + myname + " in action "  + action->getName() + " with label " + action->getLabel() + " : " + msg );
 }
 
-void Vessel::stashBuffers(){
-  unsigned stride=comm.Get_size(); unsigned rank=comm.Get_rank();
-  unsigned n=0; for(unsigned i=rank;i<bufsize;i+=stride){ stash[n]=getBufferElement(i); n++; }
-}
-
-void Vessel::setBufferFromStash(){
-  unsigned stride=comm.Get_size(); unsigned rank=comm.Get_rank();
-  unsigned n=0; for(unsigned i=rank;i<bufsize;i+=stride){ addToBufferElement( i, stash[n]); n++; }
-}
-
 }
 }

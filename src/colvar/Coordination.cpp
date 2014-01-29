@@ -84,8 +84,10 @@ CoordinationBase(ao)
 
   string sw,errors;
   parse("SWITCH",sw);
-  if(sw.length()>0) switchingFunction.set(sw,errors);
-  else {
+  if(sw.length()>0){
+    switchingFunction.set(sw,errors);
+    if( errors.length()!=0 ) error("problem reading SWITCH keyword : " + errors );
+  } else {
     int nn=6;
     int mm=12;
     double d0=0.0;
@@ -104,7 +106,7 @@ CoordinationBase(ao)
 double Coordination::pairing(double distance,double&dfunc,unsigned i,unsigned j)const{
   (void) i; // avoid warnings
   (void) j; // avoid warnings
-  return switchingFunction.calculate(distance,dfunc);
+  return switchingFunction.calculateSqr(distance,dfunc);
 }
 
 }

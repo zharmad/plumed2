@@ -36,7 +36,7 @@ Add a time-dependent, harmonic restraint on one or more variables.
 This form of bias can be used to performed steered MD \cite Grubmuller3
 and Jarzynski sampling \cite jarzynski.
 
-The harmoic restraint on your system is given by:
+The harmonic restraint on your system is given by:
 
 \f[
 V(\vec{s},t) = \frac{1}{2} \kappa(t) ( \vec{s} - \vec{s}_0(t) )^2 
@@ -71,7 +71,7 @@ DISTANCE ATOMS=2,4 LABEL=d2
 MOVINGRESTRAINT ...
   ARG=d1,d2 
   STEP0=0    AT0=1.0,1.5 KAPPA0=0.0,0.0
-  STEP0=1000 AT0=1.0,1.5 KAPPA0=1.0,1.0
+  STEP1=1000 AT1=1.0,1.5 KAPPA1=1.0,1.0
 ... MOVINGRESTRAINT
 \endverbatim
 The following input is progressively bringing atoms 1 and 2
@@ -80,8 +80,9 @@ close to each other with an upper wall
 DISTANCE ATOMS=1,2 LABEL=d1
 MOVINGRESTRAINT ...
   ARG=d1
+  VERSE=U
   STEP0=0    AT0=1.0 KAPPA0=10.0
-  STEP0=1000 AT0=0.0
+  STEP1=1000 AT1=0.0
 ... MOVINGRESTRAINT
 \endverbatim
 
@@ -166,7 +167,7 @@ verse(getNumberOfArguments())
   // add the centers of the restraint as additional components that can be retrieved (useful for debug)
 
   std::string comp;
-  for(int i=0;i< getNumberOfArguments() ;i++){
+  for(unsigned i=0;i< getNumberOfArguments() ;i++){
 	comp=getPntrToArgument(i)->getName()+"_cntr"; // each spring has its own center 
         addComponent(comp); componentIsNotPeriodic(comp);
 	comp=getPntrToArgument(i)->getName()+"_work"; // each spring has its own work

@@ -277,12 +277,15 @@ void PlumedMain::cmd(const std::string & word,void*val){
   } else if(word=="setLogFile"){
        CHECK_NOTINIT(initialized,word);
        CHECK_NULL(val,word);
-       log.open(static_cast<char*>(val),"w");
+       log.open(static_cast<char*>(val));
 // other commands that should be used after initialization:
   } else if(word=="setStopFlag"){
        CHECK_INIT(initialized,word);
        CHECK_NULL(val,word);
        stopFlag=static_cast<int*>(val);
+  } else if(word=="writeCheckPointFile"){
+       CHECK_INIT(initialized,word);
+       writeCheckPointFile();
   } else if(word=="getExchangesFlag"){
        CHECK_INIT(initialized,word);
        CHECK_NULL(val,word);
@@ -353,7 +356,7 @@ void PlumedMain::init(){
   log<<"PLUMED is starting\n";
   log<<"PLUMED compiled on " __DATE__ " at " __TIME__ "\n";
   log<<"Please cite this paper when using PLUMED ";
-  log<<cite("Tribello, Bonomi, Branduardi, Camilloni, and Bussi, Comput. Phys. Commun. DOI:10.1016/j.cpc.2013.09.018 (2013)");
+  log<<cite("Tribello, Bonomi, Branduardi, Camilloni, and Bussi, Comput. Phys. Commun. 185, 604 (2014)");
   log<<"\n";
   log<<"For further information see the PLUMED web page at http://www.plumed-code.org\n";
   log.printf("Molecular dynamics engine: %s\n",MDEngine.c_str());
@@ -384,6 +387,18 @@ void PlumedMain::readInputFile(std::string str){
   exchangePatterns.setFlag(exchangePatterns.NONE);
   while(Tools::getParsedLine(ifile,words) && words[0]!="ENDPLUMED") readInputWords(words);
   log.printf("END FILE: %s\n",str.c_str());
+  log.flush();
+  // Setup checkpoint file
+  cfile.link(*this); cfile.open("plumed_state.itp"); firstcheckdone=false;
+  // Read in checkpoint file for restart
+  if( getRestart() ){
+      IFile cifile; cifile.link(*this); cifile.open("plumed_state.itp");
+      for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
+          (*p)->restartFromCheckPointFile( cifile );
+      }
+      cifile.close();
+      firstcheckdone=true; // This ensures old restart file is backed up
+  } 
   log.flush();	
 
   pilots=actionSet.select<ActionPilot*>();
@@ -587,6 +602,14 @@ void PlumedMain::justApply(){
      else plumed_merror("your md code cannot handle plumed stop events - add a call to plumed.comm(stopFlag,stopCondition)");
   }  
   stopwatch.stop("5 Applying (backward loop)");
+
+// flush by default every 10000 steps
+// hopefully will not affect performance
+  if(step%10000==0){
+    fflush();
+    log.flush();
+    for(ActionSet::const_iterator p=actionSet.begin();p!=actionSet.end();++p) (*p)->fflush();
+  }
 }
 
 void PlumedMain::load(const std::string& ss){
@@ -666,6 +689,19 @@ void PlumedMain::runJobsAtEndOfCalculation(){
   for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
       (*p)->runFinalJobs();
   }
+}
+
+void PlumedMain::writeCheckPointFile(){
+  // Rewind auomatically backs up previous check point files
+  if(firstcheckdone) cfile.rewind();
+
+  // Write everything to checkpoint file
+  for(ActionSet::iterator p=actionSet.begin();p!=actionSet.end();++p){
+      (*p)->dumpCheckPointFile( cfile ); 
+  }
+  firstcheckdone=true;
+  // Flush the checkpoint file
+  cfile.flush();
 } 
 
 }

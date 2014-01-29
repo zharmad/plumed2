@@ -33,6 +33,10 @@ std::string getPlumedRoot();
 
 std::string getMakefile();
 
+std::string getVersion();
+
+std::string getVersionLong();
+
 bool hasMatheval();
 
 bool hasDlopen();
@@ -42,6 +46,10 @@ bool hasAlmost();
 bool isInstalled();
 
 bool hasCregex();
+
+bool hasMolfile();
+
+bool hasZlib();
 
 }
 }

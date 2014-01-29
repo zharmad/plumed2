@@ -100,15 +100,19 @@ PLUMED_MULTICOLVAR_INIT(ao)
   std::string sfinput,errors; parse("SWITCH",sfinput);
   if( sfinput.length()>0 ){
       sf1.set(sfinput,errors);
+      if( errors.length()!=0 ) error("problem reading SWITCH keyword : " + errors );
       sf2.set(sfinput,errors);
+      if( errors.length()!=0 ) error("problem reading SWITCH keyword : " + errors );   
   } else {
       parse("SWITCHA",sfinput); 
       if(sfinput.length()>0){
          weightHasDerivatives=true;
          sf1.set(sfinput,errors);
+         if( errors.length()!=0 ) error("problem reading SWITCHA keyword : " + errors );
          sfinput.clear(); parse("SWITCHB",sfinput);
          if(sfinput.length()==0) error("found SWITCHA keyword without SWITCHB");
          sf2.set(sfinput,errors); 
+         if( errors.length()!=0 ) error("problem reading SWITCHB keyword : " + errors );
       } else {
          error("missing definition of switching functions");
       } 
@@ -134,7 +138,7 @@ void Bridge::doJobsRequiredBeforeTaskList(){
 
 void Bridge::calculateWeight(){
   Vector dij=getSeparation( getPosition(0), getPosition(1) );
-  double dw, w=sf1.calculate( dij.modulo(), dw );
+  double dw, w=sf1.calculateSqr( dij.modulo2(), dw );
   setWeight( w );
 
   if( w<getTolerance() ) return; 
@@ -145,7 +149,7 @@ void Bridge::calculateWeight(){
 
 double Bridge::compute(){
   Vector dik=getSeparation( getPosition(0), getPosition(2) );
-  double dw, w=sf2.calculate( dik.modulo(), dw );
+  double dw, w=sf2.calculateSqr( dik.modulo2(), dw );
 
   // And finish the calculation
   addAtomsDerivatives( 0, -dw*dik );

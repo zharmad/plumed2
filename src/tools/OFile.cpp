@@ -32,6 +32,11 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>
+#include <cerrno>
+
+#ifdef __PLUMED_HAS_ZLIB
+#include <zlib.h>
+#endif
 
 namespace PLMD{
 
@@ -40,7 +45,15 @@ size_t OFile::llwrite(const char*ptr,size_t s){
   if(linked) return linked->llwrite(ptr,s);
   if(! (comm && comm->Get_rank()>0)){
     if(!fp) plumed_merror("writing on uninitilized File");
-    r=fwrite(ptr,1,s,fp);
+    if(gzfp){
+#ifdef __PLUMED_HAS_ZLIB
+      r=gzwrite(gzFile(gzfp),ptr,s);
+#else
+      plumed_merror("trying to use a gz file without zlib being linked");
+#endif
+    } else {
+      r=fwrite(ptr,1,s,fp);
+    }
   }
   if(comm) comm->Bcast(r,0);
   return r;
@@ -69,6 +82,7 @@ OFile::~OFile(){
 
 OFile& OFile::link(OFile&l){
   fp=NULL;
+  gzfp=NULL;
   linked=&l;
   return *this;
 }
@@ -221,7 +235,7 @@ void OFile::setBackupString( const std::string& str ){
 void OFile::backupAllFiles( const std::string& str ){
   plumed_assert( backstring!="bck" && plumed && !plumed->getRestart() );
   size_t found=str.find_last_of("/\\");
-  std::string filename = str + plumed->getSuffix();
+  std::string filename = appendSuffix(str,plumed->getSuffix());
   std::string directory=filename.substr(0,found+1);
   std::string file=filename.substr(found+1);
   if( FileExist(filename) ) backupFile("bck", filename);
@@ -240,6 +254,7 @@ void OFile::backupFile( const std::string& bstring, const std::string& fname ){
      FILE* ff=std::fopen(const_cast<char*>(fname.c_str()),"r");
      FILE* fff=NULL;
      if(ff){
+       std::fclose(ff);
        std::string backup;
        size_t found=fname.find_last_of("/\\");
        std::string directory=fname.substr(0,found+1);
@@ -251,12 +266,11 @@ void OFile::backupFile( const std::string& bstring, const std::string& fname ){
          backup=directory+bstring +"."+num+"."+file;
          fff=std::fopen(backup.c_str(),"r");
          if(!fff) break;
+	 else std::fclose(fff);
        }
        int check=rename(fname.c_str(),backup.c_str());
-       plumed_massert(check==0,"renaming "+fname+" into "+backup+" failed for some reason");
+       plumed_massert(check==0,"renaming "+fname+" into "+backup+" failed for reason: "+strerror(errno));
      }
-     if(ff) std::fclose(ff);
-     if(fff) std::fclose(fff);
    }
 }
 
@@ -265,16 +279,31 @@ OFile& OFile::open(const std::string&path){
   eof=false;
   err=false;
   fp=NULL;
+  gzfp=NULL;
   this->path=path;
   if(plumed){
-    this->path+=plumed->getSuffix();
+    this->path=appendSuffix(path,plumed->getSuffix());
   }
-  if(plumed && plumed->getRestart()){
+  if(checkRestart()){
      fp=std::fopen(const_cast<char*>(this->path.c_str()),"a");
+     if(Tools::extension(this->path)=="gz"){
+#ifdef __PLUMED_HAS_ZLIB
+       gzfp=(void*)gzopen(const_cast<char*>(this->path.c_str()),"a9");
+#else
+       plumed_merror("trying to use a gz file without zlib being linked");
+#endif
+     }
   } else {
      backupFile( backstring, this->path );
      if(comm)comm->Barrier();
      fp=std::fopen(const_cast<char*>(this->path.c_str()),"w");
+     if(Tools::extension(this->path)=="gz"){
+#ifdef __PLUMED_HAS_ZLIB
+       gzfp=(void*)gzopen(const_cast<char*>(this->path.c_str()),"w9");
+#else
+       plumed_merror("trying to use a gz file without zlib being linked");
+#endif
+    }
   }
   if(plumed) plumed->insertFile(*this);
   return *this;
@@ -283,11 +312,57 @@ OFile& OFile::open(const std::string&path){
 OFile& OFile::rewind(){
 // we use here "hard" rewind, which means close/reopen
 // the reason is that normal rewind does not work when in append mode
+// moreover, we can take a backup of the file
   plumed_assert(fp);
   clearFields();
-  fclose(fp);
-  fp=std::fopen(const_cast<char*>(path.c_str()),"w");
+  if(gzfp){
+#ifdef __PLUMED_HAS_ZLIB
+    gzclose((gzFile)gzfp);
+#endif
+  } else fclose(fp);
+  if(!comm || comm->Get_rank()==0){
+    std::string fname=this->path;
+    size_t found=fname.find_last_of("/\\");
+    std::string directory=fname.substr(0,found+1);
+    std::string file=fname.substr(found+1);
+    std::string backup=directory+backstring +".last."+file;
+    int check=rename(fname.c_str(),backup.c_str());
+    plumed_massert(check==0,"renaming "+fname+" into "+backup+" failed for reason: "+strerror(errno));
+  }
+  if(gzfp){
+#ifdef __PLUMED_HAS_ZLIB
+    gzfp=(void*)gzopen(const_cast<char*>(this->path.c_str()),"w9");
+#endif
+  } else fp=std::fopen(const_cast<char*>(path.c_str()),"w");
   return *this;
+}
+
+FileBase& OFile::flush(){
+  if(heavyFlush){
+    if(gzfp){
+#ifdef __PLUMED_HAS_ZLIB
+      gzclose(gzFile(gzfp));
+      gzfp=(void*)gzopen(const_cast<char*>(path.c_str()),"a");
+#endif
+    } else{
+      fclose(fp);
+      fp=std::fopen(const_cast<char*>(path.c_str()),"a");
+    }
+  } else {
+    FileBase::flush();
+    // if(gzfp) gzflush(gzFile(gzfp),Z_FINISH);
+    // for some reason flushing with Z_FINISH has problems on linux
+    // I thus use this (incomplete) flush
+#ifdef __PLUMED_HAS_ZLIB
+    if(gzfp) gzflush(gzFile(gzfp),Z_FULL_FLUSH);
+#endif
+  }
+  return *this;
+}
+
+bool OFile::checkRestart()const{
+  if(plumed && plumed->getRestart()) return true;
+  else return false;
 }
 
 }
