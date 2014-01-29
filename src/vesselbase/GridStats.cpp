@@ -42,6 +42,7 @@ private:
   double i2sigma2, cellvolume;
   std::vector<unsigned> indices, ngrid;
   std::vector<double> min, pos, delx;
+  GridVesselBase* myf;
   InterpolationBase* myfield;
   void getCoordinates( const unsigned& );
 public:
@@ -68,6 +69,7 @@ void GridStats::registerKeywords( Keywords& keys ){
 GridStats::GridStats(const ActionOptions& ao):
 Action(ao),
 ActionWithValue(ao),
+myf(NULL),
 myfield(NULL)
 {
   std::string mylab; parse("ARG",mylab); 
@@ -76,7 +78,7 @@ myfield(NULL)
   addDependency(field_action);
 
   Vessel* myvessel = field_action->getVesselWithName("GRID");
-  GridVesselBase* myf=dynamic_cast<GridVesselBase*>( myvessel );
+  myf=dynamic_cast<GridVesselBase*>( myvessel );
   if(!myf) error(mylab + " is not an action that calculates a grid"); 
   
   // Create interpolators for fields
@@ -123,14 +125,13 @@ myfield(NULL)
   parseFlag("NOSKEW",noskew);
   parseFlag("SERIAL",serial);
 
-  std::string num;
   for(unsigned i=0;i<dimension;++i){
-     Tools::convert(i,num);
-     addComponent("mean-"+num); componentIsNotPeriodic("mean-"+num);
+     addComponent(myf->getQuantityDescription(i)+"_mean"); 
+     componentIsNotPeriodic(myf->getQuantityDescription(i)+"_mean");
   }
   for(unsigned i=0;i<dimension;++i){
-     Tools::convert(i,num);
-     addComponent("var-"+num); componentIsNotPeriodic("var-"+num);
+     addComponent(myf->getQuantityDescription(i)+"_var"); 
+     componentIsNotPeriodic(myf->getQuantityDescription(i)+"_var");
   }
   // variance/skewness/kurtosis are always given in directions parallel to the 
   // eigenvectors of the covariance matrix.  If dimension=2 then it is 
@@ -142,12 +143,12 @@ myfield(NULL)
   }
   if(!noskew){
      for(unsigned i=0;i<dimension;++i){
-       Tools::convert(i,num);
-       addComponent("skew-"+num); componentIsNotPeriodic("skew-"+num);
+       addComponent(myf->getQuantityDescription(i)+"_skew"); 
+       componentIsNotPeriodic(myf->getQuantityDescription(i)+"_skew");
      }
      for(unsigned i=0;i<dimension;++i){
-       Tools::convert(i,num);
-       addComponent("kurt-"+num); componentIsNotPeriodic("kurt-"+num);
+       addComponent(myf->getQuantityDescription(i)+"_kurt"); 
+       componentIsNotPeriodic(myf->getQuantityDescription(i)+"_kurt");
      }
   }
 }
@@ -212,11 +213,9 @@ void GridStats::calculate(){
   diagMat( covar, eigvals, eigvecs );
 
   // Now set the mean and covariance values
-  std::string num;
   for(unsigned i=0;i<dimension;++i){
-     Tools::convert( i, num );
-     getPntrToComponent("mean-"+num)->set( mean[i] );  
-     getPntrToComponent("var-"+num)->set( eigvals[i] );
+     getPntrToComponent(myf->getQuantityDescription(i)+"_mean")->set( mean[i] );  
+     getPntrToComponent(myf->getQuantityDescription(i)+"_var")->set( eigvals[i] );
   }
   if( dimension==2 ) getPntrToComponent("var-thet")->set( atan2( eigvecs(0,1), eigvecs(0,0) ) );
 
@@ -245,9 +244,8 @@ void GridStats::calculate(){
   comm.Sum( skew ); comm.Sum( kurt );
 
   for(unsigned i=0;i<dimension;++i){
-     Tools::convert( i, num );
-     getPntrToComponent("skew-"+num)->set( skew[i]/sqrt(eigvals[i]*eigvals[i]*eigvals[i]) );
-     getPntrToComponent("kurt-"+num)->set( kurt[i]/(eigvals[i]*eigvals[i]) - 3.0 );
+     getPntrToComponent(myf->getQuantityDescription(i)+"_skew")->set( skew[i]/sqrt(eigvals[i]*eigvals[i]*eigvals[i]) );
+     getPntrToComponent(myf->getQuantityDescription(i)+"_kurt")->set( kurt[i]/(eigvals[i]*eigvals[i]) - 3.0 );
   }
 }
 
