@@ -73,6 +73,7 @@ PlumedMain::PlumedMain():
 {
   log.link(comm);
   log.setLinePrefix("PLUMED: ");
+  cfile.link(*this); // Link the checkpoint file
   stopwatch.start();
   stopwatch.pause();
 }
@@ -389,7 +390,7 @@ void PlumedMain::readInputFile(std::string str){
   log.printf("END FILE: %s\n",str.c_str());
   log.flush();
   // Setup checkpoint file
-  cfile.link(*this); cfile.open("plumed_state.itp"); firstcheckdone=false;
+  cfile.open("plumed_state.itp"); firstcheckdone=false;
   // Read in checkpoint file for restart
   if( getRestart() ){
       IFile cifile; cifile.link(*this); cifile.open("plumed_state.itp");
