@@ -25,7 +25,7 @@
 namespace PLMD {
 namespace analysis {
 
-void SMACOF::run( PointWiseMapping* mymap ){
+void SMACOF::run( const Matrix<double>& Weights, PointWiseMapping* mymap ){
     Matrix<double> Distances( mymap->modifyDmat() ); unsigned M = Distances.nrows();
     Matrix<double> InitialZ( M, mymap->getNumberOfProperties() );     //want Mx2 Z matrix but you set columns to M dimension first and then changes to 2 underneath
     for(unsigned i=0; i<M; ++i){
@@ -35,16 +35,16 @@ void SMACOF::run( PointWiseMapping* mymap ){
     }
     
      //create the matrix of weights
-     Matrix<double> Weights(M, M); Weights=0; //Empty space created V
-     for(unsigned i=0; i<M; ++i){
-         for(unsigned j=0; j<M; ++j){
-         if(i==j) continue;
-         double w_i,w_j=0;
-         w_i=mymap->getWeight(i);
-         w_j=mymap->getWeight(j);
-         Weights(i,j) = w_i * w_j;  
-         }
-     }
+     //Matrix<double> Weights(M, M); Weights=0; //Empty space created V
+     //for(unsigned i=0; i<M; ++i){
+         //for(unsigned j=0; j<M; ++j){
+         //if(i==j) continue;
+         //double w_i,w_j=0;
+         //w_i=mymap->getWeight(i);
+         //w_j=mymap->getWeight(j);
+         //Weights(i,j) = w_i * w_j;
+         //}
+     //}
 
     // Calculate V
     Matrix<double> V(M,M);

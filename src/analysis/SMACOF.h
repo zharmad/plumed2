@@ -34,7 +34,7 @@ namespace analysis {
 class SMACOF {
 public:
   static double calculateSigma( const Matrix<double>& Weights, const Matrix<double>& Distances, const Matrix<double>& InitialZ );
-  static void run( PointWiseMapping* mymap );
+  static void run( const Matrix<double>& Weights, PointWiseMapping* mymap );
 };
 
 }

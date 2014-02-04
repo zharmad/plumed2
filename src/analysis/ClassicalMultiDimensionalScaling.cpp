@@ -84,8 +84,21 @@ void ClassicalMultiDimensionalScaling::analyzeLandmarks(){
   // Run multidimensional scaling
   ClassicalScaling::run( myembedding );
 
+    //create the matrix of weights
+    unsigned M = myembedding->getNumberOfReferenceFrames();
+    Matrix<double> Weights(M, M); Weights=0; //Empty space created V
+       for(unsigned i=0; i<M; ++i){
+           for(unsigned j=0; j<M; ++j){
+           if(i==j) continue;
+           double w_i,w_j=0;
+           w_i=myembedding->getWeight(i);
+           w_j=myembedding->getWeight(j);
+           Weights(i,j) = w_i * w_j;
+       }
+    }
+
   // Run Smacof
-  if( !nosmacof ) SMACOF::run( myembedding );
+  if( !nosmacof ) SMACOF::run( Weights, myembedding );
 
   // Output the embedding as long lists of data
 //  std::string gfname=saveResultsFromPreviousAnalyses( ofilename );
