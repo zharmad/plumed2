@@ -256,14 +256,14 @@ template <typename T> int pseudoInvert( const Matrix<T>& A, Matrix<double>& pseu
 
   // This optimizes the size of the work array used in lapack singular value decomposition
   int lwork=-1; double* work=new double[1];
-  F77_FUNC(dgesvd,DGESVD)( "A", "A", &nrows, &ncols, da, &nrows, S, U, &nrows, VT, &ncols, work, &lwork, &info );
+  plumed_lapack_dgesvd( "A", "A", &nrows, &ncols, da, &nrows, S, U, &nrows, VT, &ncols, work, &lwork, &info );
   if(info!=0) return info;
 
   // Retrieve correct sizes for work and rellocate
   lwork=(int) work[0]; delete [] work; work=new double[lwork];
 
   // This does the singular value decomposition
-  F77_FUNC(dgesvd,DGESVD)( "A", "A", &nrows, &ncols, da, &nrows, S, U, &nrows, VT, &ncols, work, &lwork, &info );
+  plumed_lapack_dgesvd( "A", "A", &nrows, &ncols, da, &nrows, S, U, &nrows, VT, &ncols, work, &lwork, &info );
   if(info!=0) return info; 
 
   // Compute the tolerance on the singular values ( machine epsilon * number of singular values * maximum singular value )
