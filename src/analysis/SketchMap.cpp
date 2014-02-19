@@ -37,6 +37,7 @@ private:
   std::string efilename;
   PointWiseMapping* myembedding;
   SwitchingFunction lowdf, highdf;
+  double recalculateWeights( const Matrix<double>& Distances, const Matrix<double>& F, Matrix<double>& weights );
 public:
   static void registerKeywords( Keywords& keys );
   SketchMap( const ActionOptions& ao );
@@ -135,49 +136,47 @@ void SketchMap::analyzeLandmarks(){
     ClassicalScaling::run( myembedding );
     
     
-    // Calculate the value of sigma
-    double filt=0; Matrix<double> f(M,M), d(M,M);
-    for(unsigned i=1; i<M; ++i){
-        for(unsigned j=0; j<i; ++j){
-            double filter=F(i,j)-f(i,j);
-            filt+=NiNj(i,j)*filter*filter;
-        }
-    }
-    
-    Matrix<double> myfirstsig(M,M);
-    for(unsigned i=1; i<M; ++i){
-        for(unsigned j=0; j<i; ++j) {
-            myfirstsig(i,j)=filt;
-        }
-    }
-    
-    double newsig = calculateSigma( NiNj, filt , newZ );
-    //Computing whether the algorithm has converged (has the mass of the potato change
-    //when we put it back in the oven!
-    if( fabs( newsig - myfirstsig )<tol ) break;    //An f means real and by convention is put in before abs. abs means absolute value.
-    // Make initial sigma into new sigma so that the value of new sigma is used every time so that the error can be reduced
-    myfirstsig=newsig;
-    // Set InitialZ equal to newZ (step 7)
-    InitialZ = newZ;
-        
-        
+    // Calculate the value of sigma and the weights
+    Matrix<double> weights(M,M); double filt = recalculateWeights( Distances, F, weights );
 
-    //need to call in dissimilarities and F(Dij)
-    Fr = highdf.calculate( r, dr ) // high dim space
-    
-    
-    // Computing the switching functions
-    // r is the distance value, dr= the derivative and df(r)/dr x 1/r 
-    double r=0; //r is the distance value
-    fr = lowdf.calculate( r, dr ) // low dim space
-    
-
-    
-    
-    
-    
-    Fr = highdf.calculate( r, dr ) // high dim space
-    fr = lowdf.calculate( r, dr ) // low dim space
+    unsigned MAXSTEPS=100; double newsig;
+    for(unsigned i=0;i<MAXSTEPS;++i){
+        // Run the smacof algorithm
+        SMACOF::run( weights, myembedding );
+        // Recalculate weights matrix and sigma
+        newsig = recalculateWeights( Distances, F, weights );       
+        // Test whether or not the algorithm has converged
+        if( fabs( newsig - filt )<tol ) break;
+        // Make initial sigma into new sigma so that the value of new sigma is used every time so that the error can be reduced
+        filt=newsig;
+    } 
+          
+//   //Computing whether the algorithm has converged (has the mass of the potato change
+//     //when we put it back in the oven!
+//     if( fabs( newsig - myfirstsig )<tol ) break;    //An f means real and by convention is put in before abs. abs means absolute value.
+//     // Make initial sigma into new sigma so that the value of new sigma is used every time so that the error can be reduced
+//     myfirstsig=newsig;
+//     // Set InitialZ equal to newZ (step 7)
+//     InitialZ = newZ;
+//         
+//         
+// 
+//     //need to call in dissimilarities and F(Dij)
+//     Fr = highdf.calculate( r, dr ) // high dim space
+//     
+//     
+//     // Computing the switching functions
+//     // r is the distance value, dr= the derivative and df(r)/dr x 1/r 
+//     double r=0; //r is the distance value
+//     fr = lowdf.calculate( r, dr ) // low dim space
+//     
+// 
+//     
+//     
+//     
+//     
+//     Fr = highdf.calculate( r, dr ) // high dim space
+//     fr = lowdf.calculate( r, dr ) // low dim space
 
 
   // Output the embedding as long lists of data
@@ -204,6 +203,25 @@ void SketchMap::analyzeLandmarks(){
      myembedding->print( "classical mds", getTime(), afile, getOutputFormat() );
      afile.close();
   }
+}
+
+double SketchMap::recalculateWeights( const Matrix<double>& Distances, const Matrix<double>& F, Matrix<double>& weights ){
+  double filt=0; Matrix<double> weights(M,M);
+  for(unsigned i=1; i<M; ++i){
+      for(unsigned j=0; j<i; ++j){
+          double tempd=0;
+          for(unsigned k=0;k<nlow;++k){
+             double tmp = myembedding->getProjectionCoordinate( i, k ) - myembedding->getProjectionCoordinate( j, k );
+             tempd += tmp*tmp;
+          }
+          double dij=sqrt(tempd);
+          double fij=lowdf.calculate( dij, dr );
+          double filter=F(i,j)-fij;
+          weights(i,j)=weights(j,i) = ( filter*dij*dr ) / ( Distances(i,j) - dij );
+          filt+=NiNj(i,j)*filter*filter;
+      }
+  }
+  return filt;
 }
 
 }
