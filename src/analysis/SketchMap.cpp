@@ -107,9 +107,77 @@ void SketchMap::analyzeLandmarks(){
    //
    // fr = lowdf.calculate( r, dr )
 
+  //Inputting the weights
+    unsigned M = myembedding->getNumberOfReferenceFrames();
+    Matrix<double> NiNj(M, M); NiNj=0.0;
+    for(unsigned i=0; i<M; ++i){
+        for(unsigned j=0; j<M; ++j){
+            double n_i,n_j=0;
+            n_i=myembedding->getWeight(i);
+            n_j=myembedding->getWeight(j);
+            if(i==j) n_i = n_j = 0;
+            NiNj(i,j) = n_i * n_j;
+                        
+        }
+    }
+    
+    // Calculate matrix of dissimilarities (High dimensional space) 
+    myembedding->calculateAllDistances( getPbc(), getArguments(), comm, myembedding->modifyDmat(), true );
+    Matrix<double> Distances( mymap->modifyDmat() ); //making a copy
+    Matrix<double> F(M,M); double dr;
+    for(unsigned i=1; i<M; ++i){
+        for(unsigned j=0; j<i; ++j) {
+            F(i,j) = F(j,i) = highdf.calculate( Distances(i,j), dr ); // high dim space
+        }
+        
+    }
+    // Calculates the first guess of projections in LD space
+    ClassicalScaling::run( myembedding );
+    
+    
+    // Calculate the value of sigma
+    double filt=0; Matrix<double> f(M,M), d(M,M);
+    for(unsigned i=1; i<M; ++i){
+        for(unsigned j=0; j<i; ++j){
+            double filter=F(i,j)-f(i,j);
+            filt+=NiNj(i,j)*filter*filter;
+        }
+    }
+    
+    Matrix<double> myfirstsig(M,M);
+    for(unsigned i=1; i<M; ++i){
+        for(unsigned j=0; j<i; ++j) {
+            myfirstsig(i,j)=filt;
+        }
+    }
+    
+    double newsig = calculateSigma( NiNj, filt , newZ );
+    //Computing whether the algorithm has converged (has the mass of the potato change
+    //when we put it back in the oven!
+    if( fabs( newsig - myfirstsig )<tol ) break;    //An f means real and by convention is put in before abs. abs means absolute value.
+    // Make initial sigma into new sigma so that the value of new sigma is used every time so that the error can be reduced
+    myfirstsig=newsig;
+    // Set InitialZ equal to newZ (step 7)
+    InitialZ = newZ;
+        
+        
 
+    //need to call in dissimilarities and F(Dij)
+    Fr = highdf.calculate( r, dr ) // high dim space
+    
+    
+    // Computing the switching functions
+    // r is the distance value, dr= the derivative and df(r)/dr x 1/r 
+    double r=0; //r is the distance value
+    fr = lowdf.calculate( r, dr ) // low dim space
+    
 
-
+    
+    
+    
+    
+    Fr = highdf.calculate( r, dr ) // high dim space
+    fr = lowdf.calculate( r, dr ) // low dim space
 
 
   // Output the embedding as long lists of data
