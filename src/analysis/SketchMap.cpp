@@ -37,7 +37,7 @@ private:
   std::string efilename;
   PointWiseMapping* myembedding;
   SwitchingFunction lowdf, highdf;
-  double recalculateWeights( const Matrix<double>& Distances, const Matrix<double>& F, Matrix<double>& weights );
+  double recalculateWeights( const Matrix<double>& Distances, const Matrix<double>& F, Matrix<double>& Weights );
 public:
   static void registerKeywords( Keywords& keys );
   SketchMap( const ActionOptions& ao );
@@ -110,7 +110,7 @@ void SketchMap::analyzeLandmarks(){
 
   //Inputting the weights
     unsigned M = myembedding->getNumberOfReferenceFrames();
-    Matrix<double> NiNj(M, M); NiNj=0.0;
+    Matrix<double> NiNj(M,M); NiNj=0.0;
     for(unsigned i=0; i<M; ++i){
         for(unsigned j=0; j<M; ++j){
             double n_i,n_j=0;
@@ -124,7 +124,7 @@ void SketchMap::analyzeLandmarks(){
     
     // Calculate matrix of dissimilarities (High dimensional space) 
     myembedding->calculateAllDistances( getPbc(), getArguments(), comm, myembedding->modifyDmat(), true );
-    Matrix<double> Distances( mymap->modifyDmat() ); //making a copy
+    Matrix<double> Distances( myembedding->modifyDmat() ); //making a copy
     Matrix<double> F(M,M); double dr;
     for(unsigned i=1; i<M; ++i){
         for(unsigned j=0; j<i; ++j) {
@@ -137,14 +137,14 @@ void SketchMap::analyzeLandmarks(){
     
     
     // Calculate the value of sigma and the weights
-    Matrix<double> weights(M,M); double filt = recalculateWeights( Distances, F, weights );
+    Matrix<double> Weights(M,M); double filt = recalculateWeights( Distances, F, Weights );
 
-    unsigned MAXSTEPS=100; double newsig;
+    unsigned MAXSTEPS=100; double tol=1.E-4; double newsig;
     for(unsigned i=0;i<MAXSTEPS;++i){
         // Run the smacof algorithm
-        SMACOF::run( weights, myembedding );
+        SMACOF::run( Weights, myembedding );
         // Recalculate weights matrix and sigma
-        newsig = recalculateWeights( Distances, F, weights );       
+        newsig = recalculateWeights( Distances, F, Weights );
         // Test whether or not the algorithm has converged
         if( fabs( newsig - filt )<tol ) break;
         // Make initial sigma into new sigma so that the value of new sigma is used every time so that the error can be reduced
@@ -205,8 +205,8 @@ void SketchMap::analyzeLandmarks(){
   }
 }
 
-double SketchMap::recalculateWeights( const Matrix<double>& Distances, const Matrix<double>& F, Matrix<double>& weights ){
-  double filt=0; Matrix<double> weights(M,M);
+double SketchMap::recalculateWeights( const Matrix<double>& Distances, const Matrix<double>& F, Matrix<double>& Weights ){
+  double filt=0; Matrix<double> Weights(M,M);
   for(unsigned i=1; i<M; ++i){
       for(unsigned j=0; j<i; ++j){
           double tempd=0;
@@ -217,7 +217,7 @@ double SketchMap::recalculateWeights( const Matrix<double>& Distances, const Mat
           double dij=sqrt(tempd);
           double fij=lowdf.calculate( dij, dr );
           double filter=F(i,j)-fij;
-          weights(i,j)=weights(j,i) = ( filter*dij*dr ) / ( Distances(i,j) - dij );
+          Weights(i,j)=Weights(j,i) = ( filter*dij*dr ) / ( Distances(i,j) - dij );
           filt+=NiNj(i,j)*filter*filter;
       }
   }
