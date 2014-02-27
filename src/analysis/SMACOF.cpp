@@ -33,19 +33,7 @@ void SMACOF::run( const Matrix<double>& Weights, PointWiseMapping* mymap ){
             InitialZ(i,j) =  mymap->getProjectionCoordinate( i, j );    
        }
     }
-    
-     //create the matrix of weights
-     //Matrix<double> Weights(M, M); Weights=0; //Empty space created V
-     //for(unsigned i=0; i<M; ++i){
-         //for(unsigned j=0; j<M; ++j){
-         //if(i==j) continue;
-         //double w_i,w_j=0;
-         //w_i=mymap->getWeight(i);
-         //w_j=mymap->getWeight(j);
-         //Weights(i,j) = w_i * w_j;
-         //}
-     //}
-
+   
     // Calculate V
     Matrix<double> V(M,M);
     for(unsigned i=0; i<M; ++i){
@@ -62,13 +50,12 @@ void SMACOF::run( const Matrix<double>& Weights, PointWiseMapping* mymap ){
     // And invert V
     Matrix<double> mypseudo(M, M);
     pseudoInvert(V, mypseudo);
-
     double myfirstsig = calculateSigma( Weights, Distances, InitialZ );    //this is a function that outputs the initial sigma values
     // initial sigma is made up of the original distances minus the distances between the projections all squared.
-    unsigned MAXSTEPS=100; double tol=1.E-4; Matrix<double> temp( M, M ), BZ( M, M ), newZ( M, mymap->getNumberOfProperties() );
+    unsigned MAXSTEPS=1000; double tol=1.E-2; Matrix<double> temp( M, M ), BZ( M, M ), newZ( M, mymap->getNumberOfProperties() );
     for(unsigned i=0;i<MAXSTEPS;++i){
         if(i==MAXSTEPS-1) plumed_merror("ran out of steps in SMACOF algorithm");
-        printf("Doing step %d of SMACOF %d %d \n",i,M,mymap->getNumberOfProperties() );        
+//        printf("Doing step %d of SMACOF %d %d \n",i,M,mymap->getNumberOfProperties() );        
 
         // Calculate B(Z)  which is a M x M square matrix
         //Off diagonals considered first 

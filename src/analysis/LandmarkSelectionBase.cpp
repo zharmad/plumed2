@@ -87,7 +87,12 @@ void LandmarkSelectionBase::selectFrame( const unsigned& iframe, MultiReferenceB
 
 void LandmarkSelectionBase::selectLandmarks( MultiReferenceBase* myframes ){
   // Select landmarks
-  myframes->clearFrames(); select( myframes );
+  myframes->clearFrames(); 
+  // This deals with if you are using all data
+  if(style=="ALL" && nlandmarks==0) nlandmarks=action->getNumberOfDataPoints();
+  // This actually does the landmark selection
+  select( myframes );
+  // This checks that an appropriate number of landmarks has been selected
   plumed_assert( myframes->getNumberOfReferenceFrames()==nlandmarks );
 
   // Now calculate voronoi weights 

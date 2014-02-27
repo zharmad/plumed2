@@ -45,7 +45,7 @@ public:
   void analyzeLandmarks();
 };
 
-PLUMED_REGISTER_ACTION(SketchMap,"SketchMap")
+PLUMED_REGISTER_ACTION(SketchMap,"SKETCHMAP")
 
 void SketchMap::registerKeywords( Keywords& keys ){
   AnalysisWithLandmarks::registerKeywords( keys );
@@ -103,18 +103,19 @@ void SketchMap::analyzeLandmarks(){
       }
       
   }
-  // Calculates the first guess of projections in LD space
+  // Calculates the first guess of projections in LD space 
   ClassicalScaling::run( myembedding );
   
   // Calculate the value of sigma and the weights
   Matrix<double> Weights(M,M); double filt = recalculateWeights( Distances, F, Weights );
 
-  unsigned MAXSTEPS=100; double tol=1.E-4; double newsig;
+  unsigned MAXSTEPS=100; double tol=1.E-2; double newsig;
   for(unsigned i=0;i<MAXSTEPS;++i){
       // Run the smacof algorithm
       SMACOF::run( Weights, myembedding );
       // Recalculate weights matrix and sigma
       newsig = recalculateWeights( Distances, F, Weights );
+      printf("HELLO GARETH AND RACHEL %d %f %f %f \n",i, newsig, filt, fabs( newsig - filt ) );
       // Test whether or not the algorithm has converged
       if( fabs( newsig - filt )<tol ) break;
       // Make initial sigma into new sigma so that the value of new sigma is used every time so that the error can be reduced
