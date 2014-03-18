@@ -39,20 +39,20 @@ OBJ_KERNEL=$(XXX:.c=.o)
 ALL_OBJ=$(OBJ_KERNEL) $(OBJ_WRAPPER) $(OBJ_DYNAMIC_WRAPPER) $(OBJ_MAIN)
 
 # plumed kernel
-PLUMED_KERNEL=$(PLUMED_LIBDIR)libplumedKernel.$(SOEXT)
+PLUMED_KERNEL=$(DESTDIR)$(PLUMED_LIBDIR)libplumedKernel.$(SOEXT)
 
 # plumed library (kernel + wrapper)
-PLUMED_SHARED_OBJ=$(PLUMED_LIBDIR)libplumed.$(SOEXT)
+PLUMED_SHARED_OBJ=$(DESTDIR)$(PLUMED_LIBDIR)libplumed.$(SOEXT)
 
 # plumed scripts
 PLUMED_SCRIPTS_SH=$(shell cd ../../scripts/ ; ls *.sh 2>/dev/null)
 PLUMED_SCRIPTS=$(PLUMED_SCRIPTS_SH:.sh=)
-PLUMED_SCRIPTS_EXE=$(addprefix $(PLUMED_LIBDIR)plumed-,$(PLUMED_SCRIPTS))
+PLUMED_SCRIPTS_EXE=$(addprefix $(DESTDIR)$(PLUMED_LIBDIR)plumed-,$(PLUMED_SCRIPTS))
 
 # plumed main exec
-PLUMED_MAIN_STATIC=$(PLUMED_LIBDIR)plumed
-PLUMED_MAIN_SHARED=$(PLUMED_LIBDIR)plumed-shared
-PLUMED_MAIN_RUNTIME=$(PLUMED_LIBDIR)plumed-runtime
+PLUMED_MAIN_STATIC=$(DESTDIR)$(PLUMED_LIBDIR)plumed
+PLUMED_MAIN_SHARED=$(DESTDIR)$(PLUMED_LIBDIR)plumed-shared
+PLUMED_MAIN_RUNTIME=$(DESTDIR)$(PLUMED_LIBDIR)plumed-runtime
 
 .PHONY: all links $(DIRS) $(DIRSLINKS) all-static Plumed.cmake Plumed.inc
 ifdef SOEXT
@@ -86,30 +86,30 @@ install:
 
 install-do:
 	$(MAKE) uninstall
-	mkdir -p $(PLUMED_INSTALL_PREFIX)/bin
-	mkdir -p $(PLUMED_INSTALL_ROOT)/src/lib
-	mkdir -p $(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)
+	mkdir -p $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin
+	mkdir -p $(DESTDIR)$(PLUMED_INSTALL_ROOT)/src/lib
+	mkdir -p $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)
 # rebuild libraries and main using new target dir
-	$(MAKE) PLUMED_LIBDIR=$(PLUMED_INSTALL_ROOT)/src/lib/ PLUMED_INSTALL=Install all
+	$(MAKE) PLUMED_LIBDIR=$(PLUMED_INSTALL_ROOT)/src/lib/ DESTDIR=$(DESTDIR) PLUMED_INSTALL=Install all 
 # copy .h, .cpp .o compile_options.sh and documentation:
-	cd ../../ ; tar cf - patches scripts src/*/*.h src/*/*.cpp src/*/*.o src/config/compile_options.sh *-doc | tar xf - -C $(PLUMED_INSTALL_ROOT)/
+	cd ../../ ; tar cf - patches scripts src/*/*.h src/*/*.cpp src/*/*.o src/config/compile_options.sh *-doc | tar xf - -C $(DESTDIR)$(PLUMED_INSTALL_ROOT)/
 # also copy .h files into include/ dir
-	cd ../../src ; tar cf - */*.h $$(find . -type l) | tar xf - -C $(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)/
+	cd ../../src ; tar cf - */*.h $$(find . -type l) | tar xf - -C $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)/
 # copy inc files changing the path
-	for file in Plumed.inc* Plumed.cmake* ; do sed "s| $(realpath ../../)| $(PLUMED_INSTALL_ROOT)/|g" $$file > $(PLUMED_INSTALL_ROOT)/src/lib/$$file ; done
+	for file in Plumed.inc* Plumed.cmake* ; do sed "s| $(realpath ../../)| $(PLUMED_INSTALL_ROOT)/|g" $$file > $(DESTDIR)$(PLUMED_INSTALL_ROOT)/src/lib/$$file ; done
 # modulefile
-	@sed "s|@_PREFIX_@|$(PLUMED_INSTALL_PREFIX)|" modulefile.in | sed "s|@_SOEXT_@|$(SOEXT)|"> $(PLUMED_INSTALL_ROOT)/src/lib/modulefile
+	@sed "s|@_PREFIX_@|$(PLUMED_INSTALL_PREFIX)|" modulefile.in | sed "s|@_SOEXT_@|$(SOEXT)|"> $(DESTDIR)$(PLUMED_INSTALL_ROOT)/src/lib/modulefile
 # install links
-	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/plumed $(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)
-	for file in $(PLUMED_SCRIPTS) ; do ln -s $(PLUMED_INSTALL_ROOT)/src/lib/plumed-$$file $(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)-$$file ; done
+	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/plumed $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)
+	for file in $(PLUMED_SCRIPTS) ; do ln -s $(PLUMED_INSTALL_ROOT)/src/lib/plumed-$$file $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)-$$file ; done
 ifdef SOEXT
-	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/libplumed.$(SOEXT) $(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX).$(SOEXT)
-	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/libplumedKernel.$(SOEXT) $(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX)Kernel.$(SOEXT)
+	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/libplumed.$(SOEXT) $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX).$(SOEXT)
+	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/libplumedKernel.$(SOEXT) $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX)Kernel.$(SOEXT)
 endif
-	chmod -R go+rX,go-w $(PLUMED_INSTALL_ROOT)
-	chmod -R go+rX,go-w $(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)
-	chmod -R go+rX,go-w $(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)
-	chmod -R go+rX,go-w $(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)-*
+	chmod -R go+rX,go-w $(DESTDIR)$(PLUMED_INSTALL_ROOT)
+	chmod -R go+rX,go-w $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)
+	chmod -R go+rX,go-w $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)
+	chmod -R go+rX,go-w $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)-*
 	@echo
 	@echo "*** PLUMED has been installed ***"
 	@echo
@@ -139,12 +139,12 @@ ifdef SOEXT
 endif
 
 uninstall:
-	rm -fr $(PLUMED_INSTALL_ROOT)
-	rm -fr $(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)
-	rm -f $(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)
-	rm -f $(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)-*
-	rm -f $(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX).$(SOEXT)
-	rm -f $(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX)Kernel.$(SOEXT)
+	rm -fr $(DESTDIR)$(PLUMED_INSTALL_ROOT)
+	rm -fr $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)
+	rm -f $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)
+	rm -f $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)-*
+	rm -f $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX).$(SOEXT)
+	rm -f $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX)Kernel.$(SOEXT)
 
 $(DIRS):
 	$(MAKE) -C $@ obj
@@ -188,10 +188,10 @@ Plumed.inc:
 	@echo Building Plumed.inc
 	@echo "PLUMED_RUNTIME_LOAD=" $(realpath $(OBJ_DYNAMIC_WRAPPER)) $(LIBS) $(LDFLAGS) > $@
 	@echo "PLUMED_STATIC_LOAD=" $(realpath $(OBJ_KERNEL)) $(realpath $(OBJ_WRAPPER)) $(LIBS) $(DYNAMIC_LIBS) $(LDFLAGS) >> $@
-	@echo "PLUMED_SHARED_LOAD=" $(realpath ./)/$(PLUMED_SHARED_OBJ) $(LIBS) $(LDFLAGS) >> $@
+	@echo "PLUMED_SHARED_LOAD=" $(realpath ./)/libplumed.$(SOEXT) $(LIBS) $(LDFLAGS) >> $@
 	@echo "PLUMED_RUNTIME_DEPENDENCIES="   >> $@
 	@echo "PLUMED_STATIC_DEPENDENCIES=" $(realpath $(OBJ_KERNEL)) $(realpath $(OBJ_WRAPPER))  >> $@
-	@echo "PLUMED_SHARED_DEPENDENCIES=" $(realpath ./)/$(PLUMED_SHARED_OBJ)  >> $@
+	@echo "PLUMED_SHARED_DEPENDENCIES=" $(realpath ./)/libplumed.$(SOEXT)  >> $@
 
 Plumed.inc.runtime: Plumed.inc
 	@echo Building Plumed.inc, runtime-linking version
@@ -212,10 +212,10 @@ Plumed.cmake:
 	@echo Building Plumed.cmake
 	@echo "set(PLUMED_RUNTIME_LOAD " $(realpath $(OBJ_DYNAMIC_WRAPPER)) $(LIBS) $(LDFLAGS)")" > $@
 	@echo "set(PLUMED_STATIC_LOAD " $(realpath $(OBJ_KERNEL)) $(realpath $(OBJ_WRAPPER)) $(LIBS) $(DYNAMIC_LIBS) $(LDFLAGS)")" >> $@
-	@echo "set(PLUMED_SHARED_LOAD " $(realpath ./)/$(PLUMED_SHARED_OBJ) $(LIBS) $(LDFLAGS)")" >> $@
+	@echo "set(PLUMED_SHARED_LOAD " $(realpath ./)/libplumed.$(SOEXT) $(LIBS) $(LDFLAGS)")" >> $@
 	@echo "set(PLUMED_RUNTIME_DEPENDENCIES) "   >> $@
 	@echo "set(PLUMED_STATIC_DEPENDENCIES " $(realpath $(OBJ_KERNEL)) $(realpath $(OBJ_WRAPPER))")"  >> $@
-	@echo "set(PLUMED_SHARED_DEPENDENCIES " $(realpath ./)/$(PLUMED_SHARED_OBJ)")"  >> $@
+	@echo "set(PLUMED_SHARED_DEPENDENCIES " $(realpath ./)/libplumed.$(SOEXT)")"  >> $@
 
 Plumed.cmake.runtime: Plumed.cmake
 	@echo Building Plumed.cmake, runtime-linking version
