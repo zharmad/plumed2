@@ -100,11 +100,11 @@ install-do:
 # modulefile
 	@sed "s|@_PREFIX_@|$(PLUMED_INSTALL_PREFIX)|" modulefile.in | sed "s|@_SOEXT_@|$(SOEXT)|"> $(DESTDIR)$(PLUMED_INSTALL_ROOT)/src/lib/modulefile
 # install links
-	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/plumed $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)
-	for file in $(PLUMED_SCRIPTS) ; do ln -s $(PLUMED_INSTALL_ROOT)/src/lib/plumed-$$file $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin/plumed$(PLUMED_INSTALL_LIBSUFFIX)-$$file ; done
+	cd $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin && ln -s ../lib/plumed$(PLUMED_INSTALL_LIBSUFFIX)/src/lib/plumed ./plumed$(PLUMED_INSTALL_LIBSUFFIX)
+	cd $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/bin && for file in $(PLUMED_SCRIPTS) ; do ln -s ../lib/plumed$(PLUMED_INSTALL_LIBSUFFIX)/src/lib/plumed-$$file ./plumed$(PLUMED_INSTALL_LIBSUFFIX)-$$file ; done
 ifdef SOEXT
-	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/libplumed.$(SOEXT) $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX).$(SOEXT)
-	ln -s $(PLUMED_INSTALL_ROOT)/src/lib/libplumedKernel.$(SOEXT) $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/lib/libplumed$(PLUMED_INSTALL_LIBSUFFIX)Kernel.$(SOEXT)
+	cd $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/lib && ln -s ../lib/plumed$(PLUMED_INSTALL_LIBSUFFIX)/src/lib/libplumed.$(SOEXT) libplumed$(PLUMED_INSTALL_LIBSUFFIX).$(SOEXT)
+	cd $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/lib && ln -s ../lib/plumed$(PLUMED_INSTALL_LIBSUFFIX)/src/lib/libplumedKernel.$(SOEXT) libplumed$(PLUMED_INSTALL_LIBSUFFIX)Kernel.$(SOEXT)
 endif
 	chmod -R go+rX,go-w $(DESTDIR)$(PLUMED_INSTALL_ROOT)
 	chmod -R go+rX,go-w $(DESTDIR)$(PLUMED_INSTALL_PREFIX)/include/plumed$(PLUMED_INSTALL_LIBSUFFIX)
