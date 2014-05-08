@@ -46,7 +46,6 @@ namespace PLMD{
 This collective variable calculates a scoring function based on the comparison of calculated and
 experimental methyl chemical shifts. 
 
-
 CH3Shift \cite Sahakyan:2011bn is employed to back calculate the chemical shifts of methyl groups
 (ALA:HB; ILE:HD,HG2; LEU:HD1,HD2; THR:HG2; VAL:HG1,HG2) that are then compared with a set of experimental 
 values to generate a score \cite Robustelli:2010dn \cite Granata:2013dk.
