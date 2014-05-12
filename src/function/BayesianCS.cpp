@@ -72,11 +72,13 @@ class BayesianCS :
   double temp_;
   int MCsteps_;
   int MCstride_;
-  int MCaccept_;
+  unsigned int MCseed_;
+  unsigned int MCaccept_;
   Value* valueSigma;
   Value* valueAccept;
   
   void do_MC();
+  double get_energy(double sigma);
   
 public:
   BayesianCS(const ActionOptions&);
@@ -90,29 +92,31 @@ PLUMED_REGISTER_ACTION(BayesianCS,"BAYESIANCS")
 void BayesianCS::registerKeywords(Keywords& keys){
   Function::registerKeywords(keys);
   keys.use("ARG");
-  keys.add("compulsory","SIGMA0",   "100.0", "initial value of the uncertainty parameter");
-  keys.add("compulsory","SIGMA_MIN","0.0001","minimum value of the uncertainty parameter");
-  keys.add("compulsory","SIGMA_MAX","100.0", "maximum value of the uncertainty parameter");
-  keys.add("compulsory","DSIGMA",   "0.0001","maximum MC move of the uncertainty parameter");
-  keys.add("compulsory","TEMP",     "300.0", "temperature of the system");
-  keys.add("compulsory","MC_STEPS", "1",     "number of MC steps");
-  keys.add("compulsory","MC_STRIDE","1",     "MC stride");
+  keys.add("compulsory","SIGMA0",   "10.0",   "initial value of the uncertainty parameter");
+  keys.add("compulsory","SIGMA_MIN","0.00001","minimum value of the uncertainty parameter");
+  keys.add("compulsory","SIGMA_MAX","10.0",   "maximum value of the uncertainty parameter");
+  keys.add("compulsory","DSIGMA",   "0.0001", "maximum MC move of the uncertainty parameter");
+  keys.add("compulsory","KBT",      "2.494",  "temperature of the system");
+  keys.add("compulsory","MC_STEPS", "1",      "number of MC steps");
+  keys.add("compulsory","MC_STRIDE","1",      "MC stride");
+  keys.add("compulsory","MC_SEED",  "1234",   "MC seed");
   componentsAreNotOptional(keys); 
 }
 
 BayesianCS::BayesianCS(const ActionOptions&ao):
 Action(ao),
 Function(ao),
-sigma0_(100.0), sigma_min_(0.0001), sigma_max_(100.0), Dsigma_(0.001), temp_(300.0),
-MC_steps_(1), MCstride_(1), MCaccept_(0)
+sigma0_(10.0), sigma_min_(0.00001), sigma_max_(10.0), Dsigma_(0.0001), temp_(2.494),
+MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
 {
   parse("SIGMA0",   sigma0_);
   parse("SIGMA_MIN",sigma_min_);
   parse("SIGMA_MAX",sigma_max_);
   parse("DSIGMA",   Dsigma_);
-  parse("TEMP",     temp_);
+  parse("KBT",      temp_);
   parse("MC_STEPS", MCsteps_);
   parse("MC_STRIDE",MCstride_);
+  parse("MC_SEED",  MCseed_);
   checkRead();
  
   log.printf("  initial value of uncertainty %f\n",sigma0_);
@@ -121,7 +125,8 @@ MC_steps_(1), MCstride_(1), MCaccept_(0)
   log.printf("  maximum MC move of the uncertainty parameter %f\n",Dsigma_);
   log.printf("  temperature of the system %f\n",temp_);
   log.printf("  number of MC steps %d\n",MCsteps_);
-  log.printf("  do MC every %d steps\n", MCstride_);    
+  log.printf("  do MC every %d steps\n", MCstride_);
+  log.printf("  MC seed %d\n", MCseed_);    
 
   addComponent("sigma");  componentIsNotPeriodic("sigma");
   addComponent("accept"); componentIsNotPeriodic("accept");
@@ -130,18 +135,16 @@ MC_steps_(1), MCstride_(1), MCaccept_(0)
   
   // initialize sigma_
   sigma_ = sigma0_;
-  // multiply by Boltzmann
-  temp_ *= plumed.getAtoms().getKBoltzmann();
   // initialize random seed
-  srand (time(NULL));
+  srand (MCseed_);
 }
 
 double BayesianCS::get_energy(double sigma){
  double ene = 0.0;
   for(unsigned i=0;i<getNumberOfArguments();++i){
-    ene += log( getArgument(i) + 2.0 * sigma * sigma );
+    ene += std::log( getArgument(i) + 2.0 * sigma * sigma );
   }
-  ene += log(sigma) + static_cast<double>(getNumberOfArguments())*log(pi/sqrt2/sigma);
+  ene += std::log(sigma) + static_cast<double>(getNumberOfArguments())*std::log(pi/sqrt2/sigma);
   return temp_ * ene;
 }
 
@@ -159,7 +162,7 @@ void BayesianCS::do_MC(){
   if(new_sigma > sigma_max_){new_sigma = 2.0 * sigma_max_ - new_sigma;}
   if(new_sigma < sigma_min_){new_sigma = 2.0 * sigma_min_ - new_sigma;}
   // calculate new energy
-  new_energy = get_energy(new_sigma);
+  double new_energy = get_energy(new_sigma);
   // accept or reject
   double s = (double)rand() / RAND_MAX;
   double delta = exp(-(new_energy-old_energy)/temp_);
@@ -173,7 +176,7 @@ void BayesianCS::do_MC(){
 
 void BayesianCS::calculate(){
   
-  // do MC stuff, if the right time step
+  // do MC stuff at the right time step
   long int step = getStep();
   if(step%MCstride_==0){do_MC();}
 
@@ -182,11 +185,11 @@ void BayesianCS::calculate(){
   for(unsigned i=0;i<getNumberOfArguments();++i){
     double v = getArgument(i) + 2.0 * sigma_ * sigma_;
     // increment energy
-    ene += log(v); 
+    ene += std::log(v); 
     // set derivatives
     setDerivative(i, temp_/v);
   };
-  ene += log(sigma_)+static_cast<double>(getNumberOfArguments())*log(pi/sqrt2/sigma_);
+  ene += std::log(sigma_)+static_cast<double>(getNumberOfArguments())*std::log(pi/sqrt2/sigma_);
   // set value
   setValue(temp_*ene);
 
