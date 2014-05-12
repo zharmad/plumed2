@@ -46,9 +46,8 @@ of maximum value specified by DSIGMA.
 
 
 \par Examples
-The following input tells plumed to print the distance between atoms 3 and 5
-its square (as computed from the x,y,z components) and the distance
-again as computed from the square root of the square.
+The following input tells plumed to use all the HA chemical shifts with the Bayesian Score and
+to print the values of the uncertainty parameter, of the MC acceptance, and of the Bayesian score.
 \verbatim
 WHOLEMOLECULES ENTITY0=1-174
 cs:  CS2BACKBONE ATOMS=1-174 DATA=data/ FF=a03_gromacs.mdb FLAT=0.0 NRES=13 ENSEMBLE
