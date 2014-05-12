@@ -50,8 +50,8 @@ The following input tells plumed to use all the HA chemical shifts with the Baye
 to print the values of the uncertainty parameter, of the MC acceptance, and of the Bayesian score.
 \verbatim
 WHOLEMOLECULES ENTITY0=1-174
-cs:  CS2BACKBONE ATOMS=1-174 DATA=data/ FF=a03_gromacs.mdb FLAT=0.0 NRES=13 ENSEMBLE
-csb: BAYESIANCS ARG=cs.ha#* SIGMA0=10.0 SIGMA_MIN=0.00001 SIGMA_MAX=10.0 DSIGMA=0.0001 KBT=2.494 MC_STEPS=10 MC_STRIDE=10 MC_SEED=1234
+cs:  CS2BACKBONE ATOMS=1-174 DATA=data/ FF=a03_gromacs.mdb FLAT=0.0 NRES=13 ENSEMBLE COMPONENTS
+csb: BAYESIANCS ARG=(cs\.ha.*) SIGMA0=10.0 SIGMA_MIN=0.00001 SIGMA_MAX=10.0 DSIGMA=0.0001 KBT=2.494 MC_STEPS=10 MC_STRIDE=10 MC_SEED=1234
 cse: RESTRAINT  ARG=csb SLOPE=1.0 KAPPA=0 AT=0.
 PRINT ARG=csb.sigma,csb.accept,cse.bias
 \endverbatim
