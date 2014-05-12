@@ -19,46 +19,51 @@
    You should have received a copy of the GNU Lesser General Public License
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
-#include "Bias.h"
+#include "Function.h"
 #include "ActionRegister.h"
 
+#include <cmath>
 
 using namespace std;
 
-
 namespace PLMD{
-namespace bias{
+namespace function{
 
-//+PLUMEDOC BIAS BAYESIANCS 
+//+PLUMEDOC FUNCTION BAYESIANCS
 /*
-Adds harmonic and/or linear restraints on one or more variables.  
+Calculate a polynomial combination of a set of other variables.
 
-Either or both
-of SLOPE and KAPPA must be present to specify the linear and harmonic force constants
-respectively.  The resulting potential is given by: 
+The functional form of this function is
 \f[
-  \sum_i \frac{k_i}{2} (x_i-a_i)^2 + m_i*(x_i-a_i)
-\f].
+C=\sum_{i=1}^{N_{arg}} c_i x_i^{p_i}
+\f]
 
-The number of components for any vector of force constants must be equal to the number
-of arguments to the action.
+The coefficients c and powers p are provided as vectors.
+
+
 
 \par Examples
-The following input tells plumed to restrain the distance between atoms 3 and 5
-and the distance between atoms 2 and 4, at different equilibrium
-values, and to print the energy of the restraint
+The following input tells plumed to print the distance between atoms 3 and 5
+its square (as computed from the x,y,z components) and the distance
+again as computed from the square root of the square.
 \verbatim
-DISTANCE ATOMS=3,5 LABEL=d1
-DISTANCE ATOMS=2,4 LABEL=d2
-BAYESIANCS ARG=d1,d2 AT=1.0,1.5 KAPPA=150.0,150.0 LABEL=restraint
-PRINT ARG=restraint.bias
+DISTANCE LABEL=dist      ATOMS=3,5 COMPONENTS
+COMBINE  LABEL=distance2 ARG=dist.x,dist.y,dist.z POWERS=2,2,2 PERIODIC=NO
+COMBINE  LABEL=distance  ARG=distance2 POWERS=0.5 PERIODIC=NO
+PRINT ARG=distance,distance2
 \endverbatim
-(See also \ref DISTANCE and \ref PRINT).
+(See also \ref PRINT and \ref DISTANCE).
+
 
 */
 //+ENDPLUMEDOC
 
-class BayesianCS : public Bias{
+
+class BayesianCS :
+  public Function
+{
+  const double pi = 3.14159265359;
+  const double sqrt2 = 1.41421356237;
   double sigma_;
   double sigma0_;
   double sigma_min_;
@@ -68,40 +73,36 @@ class BayesianCS : public Bias{
   int MCsteps_;
   int MCstride_;
   int MCaccept_;
-  Value* valueBias;
-  Value* valueForce2;
   Value* valueSigma;
   Value* valueAccept;
-
+  
   void do_MC();
-
+  
 public:
   BayesianCS(const ActionOptions&);
   void calculate();
   static void registerKeywords(Keywords& keys);
 };
 
-PLUMED_REGISTER_ACTION(Restraint,"BayesianCS")
+
+PLUMED_REGISTER_ACTION(BayesianCS,"BAYESIANCS")
 
 void BayesianCS::registerKeywords(Keywords& keys){
-   Bias::registerKeywords(keys);
-   keys.use("ARG");
-   keys.add("compulsory","SIGMA0",   "100.0", "initial value of the uncertainty parameter");
-   keys.add("compulsory","SIGMA_MIN","0.0001","minimum value of the uncertainty parameter");
-   keys.add("compulsory","SIGMA_MAX","100.0", "maximum value of the uncertainty parameter");
-   keys.add("compulsory","DSIGMA",   "0.0001","maximum MC move of the uncertainty parameter");
-   keys.add("compulsory","TEMP",     "300.0", "temperature of the system");
-   keys.add("compulsory","MC_STEPS", "1",     "number of MC steps");
-   keys.add("compulsory","MC_STRIDE","1",     "MC stride");
-   componentsAreNotOptional(keys);
-   keys.addOutputComponent("bias","default","the instantaneous value of the bias potential");
-   keys.addOutputComponent("force2","default","the instantaneous value of the squared force due to this bias potential");
-   keys.addOutputComponent("sigma","default","the instantaneous value of the uncertainty parameter");
-   keys.addOutputComponent("accept","default","MC acceptance");
+  Function::registerKeywords(keys);
+  keys.use("ARG");
+  keys.add("compulsory","SIGMA0",   "100.0", "initial value of the uncertainty parameter");
+  keys.add("compulsory","SIGMA_MIN","0.0001","minimum value of the uncertainty parameter");
+  keys.add("compulsory","SIGMA_MAX","100.0", "maximum value of the uncertainty parameter");
+  keys.add("compulsory","DSIGMA",   "0.0001","maximum MC move of the uncertainty parameter");
+  keys.add("compulsory","TEMP",     "300.0", "temperature of the system");
+  keys.add("compulsory","MC_STEPS", "1",     "number of MC steps");
+  keys.add("compulsory","MC_STRIDE","1",     "MC stride");
+  componentsAreNotOptional(keys); 
 }
 
 BayesianCS::BayesianCS(const ActionOptions&ao):
-PLUMED_BIAS_INIT(ao),
+Action(ao),
+Function(ao),
 sigma0_(100.0), sigma_min_(0.0001), sigma_max_(100.0), Dsigma_(0.001), temp_(300.0),
 MC_steps_(1), MCstride_(1), MCaccept_(0)
 {
@@ -122,12 +123,8 @@ MC_steps_(1), MCstride_(1), MCaccept_(0)
   log.printf("  number of MC steps %d\n",MCsteps_);
   log.printf("  do MC every %d steps\n", MCstride_);    
 
-  addComponent("bias");   componentIsNotPeriodic("bias");
-  addComponent("force2"); componentIsNotPeriodic("force2");
   addComponent("sigma");  componentIsNotPeriodic("sigma");
   addComponent("accept"); componentIsNotPeriodic("accept");
-  valueBias=getPntrToComponent("bias");
-  valueForce2=getPntrToComponent("force2");
   valueSigma=getPntrToComponent("sigma");
   valueAccept=getPntrToComponent("accept");
   
@@ -139,16 +136,18 @@ MC_steps_(1), MCstride_(1), MCaccept_(0)
   srand (time(NULL));
 }
 
-void BayesianCS::get_energy(double sigma){
-
-}
-
-void BayesianCS::get_force(double sigma){
-
+double BayesianCS::get_energy(double sigma){
+ double ene = 0.0;
+  for(unsigned i=0;i<getNumberOfArguments();++i){
+    ene += log( getArgument(i) + 2.0 * sigma * sigma );
+  }
+  ene += log(sigma) + static_cast<double>(getNumberOfArguments())*log(pi/sqrt2/sigma);
+  return temp_ * ene;
 }
 
 void BayesianCS::do_MC(){
  
+ // store old energy
  double old_energy = get_energy(sigma_);
  
  for(unsigned i=0;i<MCsteps_;++i){
@@ -159,10 +158,12 @@ void BayesianCS::do_MC(){
   // check boundaries
   if(new_sigma > sigma_max_){new_sigma = 2.0 * sigma_max_ - new_sigma;}
   if(new_sigma < sigma_min_){new_sigma = 2.0 * sigma_min_ - new_sigma;}
-  // calculate energy
+  // calculate new energy
   new_energy = get_energy(new_sigma);
-  // accept or reject 
-  if(accepted){
+  // accept or reject
+  double s = (double)rand() / RAND_MAX;
+  double delta = exp(-(new_energy-old_energy)/temp_);
+  if(s<delta){
    old_energy = new_energy;
    sigma_ = new_sigma;
    MCaccept_++;
@@ -171,37 +172,35 @@ void BayesianCS::do_MC(){
 }
 
 void BayesianCS::calculate(){
-  double ene=0.0;
-  double totf2=0.0;
   
   // do MC stuff, if the right time step
   long int step = getStep();
   if(step%MCstride_==0){do_MC();}
 
-  // calculate restraint
+  // cycle on dataset
+  double ene = 0.0;
   for(unsigned i=0;i<getNumberOfArguments();++i){
-    // cycle on components of i-th argument
-
-    const double cv=difference(i,at[i],getArgument(i));
-    const double k=kappa[i];
-    const double m=slope[i];
-    const double f=-(k*cv+m);
-    ene+=0.5*k*cv*cv+m*cv;
-    setOutputForce(i,f);
-    totf2+=f*f;
-
+    double v = getArgument(i) + 2.0 * sigma_ * sigma_;
+    // increment energy
+    ene += log(v); 
+    // set derivatives
+    setDerivative(i, temp_/v);
   };
+  ene += log(sigma_)+static_cast<double>(getNumberOfArguments())*log(pi/sqrt2/sigma_);
+  // set value
+  setValue(temp_*ene);
 
-  valueBias->set(ene);
-  valueForce2->set(totf2);
+  // set value of uncertainty
   valueSigma->set(sigma_);
   // calculate acceptance
   int MCtrials = step / MCstride_;
-  double accept = MCaccept_ / MCsteps_ / MCtrials;  
+  double accept = MCaccept_ / MCsteps_ / MCtrials; 
+  // set value of acceptance 
   valueAccept->set(accept);
 }
 
+
+}
 }
 
 
-}
