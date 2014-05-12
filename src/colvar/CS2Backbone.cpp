@@ -162,6 +162,7 @@ PLUMED_REGISTER_ACTION(CS2Backbone,"CS2BACKBONE")
 
 void CS2Backbone::registerKeywords( Keywords& keys ){
   Colvar::registerKeywords( keys );
+  componentsAreNotOptional(keys);
   keys.addFlag("SERIAL",false,"Perform the calculation in serial - for debug purpose.");
   keys.addFlag("COMPONENTS",false,"Each squared difference between calculated and experimental chemical shifts is used as a component");
   keys.add("atoms","ATOMS","The atoms to be included in the calculation, e.g. the whole protein.");
@@ -174,12 +175,12 @@ void CS2Backbone::registerKeywords( Keywords& keys ){
   keys.add("optional","TERMINI","Defines the protonation states of the chain-termini.");
   keys.addFlag("CYS-DISU",false,"Set to TRUE if your system has disulphide bridges.");  
   keys.addFlag("ENSEMBLE",false,"Set to TRUE if you want to average over multiple replicas.");
-  keys.addOutputComponent("ha#","COMPONENTS","the squared difference between calculated and experimental HA carbon chemical shifts for residue #"); 
-  keys.addOutputComponent("hn#","COMPONENTS","the squared difference between calculated and experimental HN carbon chemical shifts for residue #"); 
-  keys.addOutputComponent("nh#","COMPONENTS","the squared difference between calculated and experimental NH carbon chemical shifts for residue #"); 
-  keys.addOutputComponent("ca#","COMPONENTS","the squared difference between calculated and experimental CA carbon chemical shifts for residue #"); 
-  keys.addOutputComponent("cb#","COMPONENTS","the squared difference between calculated and experimental CB carbon chemical shifts for residue #"); 
-  keys.addOutputComponent("co#","COMPONENTS","the squared difference between calculated and experimental CO carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("ha_","COMPONENTS","the squared difference between calculated and experimental HA carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("hn_","COMPONENTS","the squared difference between calculated and experimental HN carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("nh_","COMPONENTS","the squared difference between calculated and experimental NH carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("ca_","COMPONENTS","the squared difference between calculated and experimental CA carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("cb_","COMPONENTS","the squared difference between calculated and experimental CB carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("co_","COMPONENTS","the squared difference between calculated and experimental CO carbon chemical shifts for residue #"); 
   keys.remove("NOPBC");
 }
 
@@ -356,12 +357,12 @@ isvectorial(false)
   } else {
     for(int i=0; i<numResidues; i++) {
       std::string num; Tools::convert(i,num);
-      addComponentWithDerivatives("ha"+num); componentIsNotPeriodic("ha"+num);
-      addComponentWithDerivatives("hn"+num); componentIsNotPeriodic("hn"+num);
-      addComponentWithDerivatives("nh"+num); componentIsNotPeriodic("nh"+num);
-      addComponentWithDerivatives("ca"+num); componentIsNotPeriodic("ca"+num);
-      addComponentWithDerivatives("cb"+num); componentIsNotPeriodic("cb"+num);
-      addComponentWithDerivatives("co"+num); componentIsNotPeriodic("co"+num);
+      addComponentWithDerivatives("ha_"+num); componentIsNotPeriodic("ha_"+num);
+      addComponentWithDerivatives("hn_"+num); componentIsNotPeriodic("hn_"+num);
+      addComponentWithDerivatives("nh_"+num); componentIsNotPeriodic("nh_"+num);
+      addComponentWithDerivatives("ca_"+num); componentIsNotPeriodic("ca_"+num);
+      addComponentWithDerivatives("cb_"+num); componentIsNotPeriodic("cb_"+num);
+      addComponentWithDerivatives("co_"+num); componentIsNotPeriodic("co_"+num);
     }
   }
   requestAtoms(atoms);
