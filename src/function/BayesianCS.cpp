@@ -31,14 +31,17 @@ namespace function{
 
 //+PLUMEDOC FUNCTION BAYESIANCS
 /*
-Calculate a polynomial combination of a set of other variables.
+Calculate a Bayesian Score to use with Chemical Shifts CV.
 
 The functional form of this function is
 \f[
-C=\sum_{i=1}^{N_{arg}} c_i x_i^{p_i}
+C=k_BT \sum_{i=1}^{N_{arg}} \log{ \left[ \frac{\pi}{\sqrt{2} \sigma} (x_i+2\sigma^2) \right]} + k_BT\log{\sigma}
 \f]
 
-The coefficients c and powers p are provided as vectors.
+where sigma is an uncertainty parameter,
+sampled by a MC algorithm in the bounded interval specified by SIGMA_MIN and SIGMA_MAX.
+The initial value of is set by SIGMA0. The MC move is a random displacement
+of maximum value specified by DSIGMA.
 
 
 
@@ -47,12 +50,13 @@ The following input tells plumed to print the distance between atoms 3 and 5
 its square (as computed from the x,y,z components) and the distance
 again as computed from the square root of the square.
 \verbatim
-DISTANCE LABEL=dist      ATOMS=3,5 COMPONENTS
-COMBINE  LABEL=distance2 ARG=dist.x,dist.y,dist.z POWERS=2,2,2 PERIODIC=NO
-COMBINE  LABEL=distance  ARG=distance2 POWERS=0.5 PERIODIC=NO
-PRINT ARG=distance,distance2
+WHOLEMOLECULES ENTITY0=1-174
+cs:  CS2BACKBONE ATOMS=1-174 DATA=data/ FF=a03_gromacs.mdb FLAT=0.0 NRES=13 ENSEMBLE
+csb: BAYESIANCS ARG=cs.ha#* SIGMA0=10.0 SIGMA_MIN=0.00001 SIGMA_MAX=10.0 DSIGMA=0.0001 KBT=2.494 MC_STEPS=10 MC_STRIDE=10 MC_SEED=1234
+cse: RESTRAINT  ARG=csb SLOPE=1.0 KAPPA=0 AT=0.
+PRINT ARG=csb.sigma,csb.accept,cse.bias
 \endverbatim
-(See also \ref PRINT and \ref DISTANCE).
+(See also \ref CS2BACKBONE and \ref RESTRAINT).
 
 
 */
