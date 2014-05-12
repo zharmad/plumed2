@@ -31,7 +31,7 @@ namespace function{
 
 //+PLUMEDOC FUNCTION BAYESIANCS
 /*
-Calculate a Bayesian Score to use with Chemical Shifts CV.
+Calculate a Bayesian Score to use with chemical shifts CV \ref CS2BACKBONE.
 
 The functional form of this function is
 \f[
