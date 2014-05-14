@@ -19,7 +19,7 @@
    You should have received a copy of the GNU Lesser General Public License
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
-#include "Function.h"
+#include "Bias.h"
 #include "ActionRegister.h"
 
 #include <cmath>
@@ -27,43 +27,41 @@
 using namespace std;
 
 namespace PLMD{
-namespace function{
+namespace bias{
 
-//+PLUMEDOC FUNCTION BAYESIANCS
+//+PLUMEDOC BIAS BAYESIANCS
 /*
-Calculate a Bayesian Score to use with chemical shifts CV \ref CS2BACKBONE.
+Calculate a Bayesian Score to use with the Chemical Shifts CV \ref CS2BACKBONE.
 
-The functional form of this function is
+The functional form of this bias is
 \f[
 C=k_BT \sum_{i=1}^{N_{arg}} \log{ \left[ \frac{\pi}{\sqrt{2} \sigma} (x_i+2\sigma^2) \right]} + k_BT\log{\sigma}
 \f]
 
 where sigma is an uncertainty parameter,
-sampled by a MC algorithm in the bounded interval specified by SIGMA_MIN and SIGMA_MAX.
-The initial value of is set by SIGMA0. The MC move is a random displacement
-of maximum value specified by DSIGMA.
+sampled by a MC algorithm in the bounded interval defined by SIGMA_MIN and SIGMA_MAX.
+The initial value is set at SIGMA0. The MC move is a random displacement
+of maximum value equal to DSIGMA.
 
 
 
 \par Examples
 The following input tells plumed to use all the HA chemical shifts with the Bayesian Score and
-to print the values of the uncertainty parameter, of the MC acceptance, and of the Bayesian score.
+to print the values of the uncertainty parameter, MC acceptance, and Bayesian score.
 \verbatim
 WHOLEMOLECULES ENTITY0=1-174
 cs:  CS2BACKBONE ATOMS=1-174 DATA=data/ FF=a03_gromacs.mdb FLAT=0.0 NRES=13 ENSEMBLE COMPONENTS
-csb: BAYESIANCS ARG=(cs\.ha.*) SIGMA0=10.0 SIGMA_MIN=0.00001 SIGMA_MAX=10.0 DSIGMA=0.0001 KBT=2.494 MC_STEPS=10 MC_STRIDE=10 MC_SEED=1234
-cse: RESTRAINT  ARG=csb SLOPE=1.0 KAPPA=0 AT=0.
-PRINT ARG=csb.sigma,csb.accept,cse.bias
+csb: BAYESIANCS ARG=(cs\.ha.*) SIGMA0=1.0 SIGMA_MIN=0.00001 SIGMA_MAX=10.0 DSIGMA=0.1 KBT=2.494 MC_STEPS=1 MC_STRIDE=1 MC_SEED=1234
+PRINT ARG=csb.sigma,csb.accept,csb.bias
 \endverbatim
-(See also \ref CS2BACKBONE and \ref RESTRAINT).
+(See also \ref CS2BACKBONE and \ref PRINT).
 
 
 */
 //+ENDPLUMEDOC
 
 
-class BayesianCS :
-  public Function
+class BayesianCS : public Bias
 {
   const double pi = 3.14159265359;
   const double sqrt2 = 1.41421356237;
@@ -77,9 +75,10 @@ class BayesianCS :
   int MCstride_;
   unsigned int MCseed_;
   unsigned int MCaccept_;
+  Value* valueBias;
   Value* valueSigma;
   Value* valueAccept;
-  
+ 
   void do_MC();
   double get_energy(double sigma);
   
@@ -93,23 +92,25 @@ public:
 PLUMED_REGISTER_ACTION(BayesianCS,"BAYESIANCS")
 
 void BayesianCS::registerKeywords(Keywords& keys){
-  Function::registerKeywords(keys);
+  Bias::registerKeywords(keys);
   keys.use("ARG");
-  keys.add("compulsory","SIGMA0",   "10.0",   "initial value of the uncertainty parameter");
+  keys.add("compulsory","SIGMA0",   "1.0",    "initial value of the uncertainty parameter");
   keys.add("compulsory","SIGMA_MIN","0.00001","minimum value of the uncertainty parameter");
   keys.add("compulsory","SIGMA_MAX","10.0",   "maximum value of the uncertainty parameter");
-  keys.add("compulsory","DSIGMA",   "0.0001", "maximum MC move of the uncertainty parameter");
+  keys.add("compulsory","DSIGMA",   "0.1",    "maximum MC move of the uncertainty parameter");
   keys.add("compulsory","KBT",      "2.494",  "temperature of the system");
   keys.add("compulsory","MC_STEPS", "1",      "number of MC steps");
   keys.add("compulsory","MC_STRIDE","1",      "MC stride");
   keys.add("compulsory","MC_SEED",  "1234",   "MC seed");
   componentsAreNotOptional(keys); 
+  keys.addOutputComponent("bias","default","the instantaneous value of the bias potential");
+  keys.addOutputComponent("sigma", "default","uncertainty parameter");
+  keys.addOutputComponent("accept","default","MC acceptance");
 }
 
 BayesianCS::BayesianCS(const ActionOptions&ao):
-Action(ao),
-Function(ao),
-sigma0_(10.0), sigma_min_(0.00001), sigma_max_(10.0), Dsigma_(0.0001), temp_(2.494),
+PLUMED_BIAS_INIT(ao),
+sigma0_(1.0), sigma_min_(0.00001), sigma_max_(10.0), Dsigma_(0.1), temp_(2.494),
 MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
 {
   parse("SIGMA0",   sigma0_);
@@ -121,7 +122,7 @@ MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
   parse("MC_STRIDE",MCstride_);
   parse("MC_SEED",  MCseed_);
   checkRead();
- 
+
   log.printf("  initial value of uncertainty %f\n",sigma0_);
   log.printf("  minimum value of uncertainty %f\n",sigma_min_);
   log.printf("  maximum value of uncertainty %f\n",sigma_max_);
@@ -131,11 +132,13 @@ MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
   log.printf("  do MC every %d steps\n", MCstride_);
   log.printf("  MC seed %d\n", MCseed_);    
 
+  addComponent("bias");   componentIsNotPeriodic("bias");
   addComponent("sigma");  componentIsNotPeriodic("sigma");
   addComponent("accept"); componentIsNotPeriodic("accept");
+  valueBias=getPntrToComponent("bias");
   valueSigma=getPntrToComponent("sigma");
   valueAccept=getPntrToComponent("accept");
-  
+
   // initialize sigma_
   sigma_ = sigma0_;
   // initialize random seed
@@ -143,11 +146,11 @@ MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
 }
 
 double BayesianCS::get_energy(double sigma){
- double ene = 0.0;
+ double ene = 1.0;
   for(unsigned i=0;i<getNumberOfArguments();++i){
-    ene += std::log( getArgument(i) + 2.0 * sigma * sigma );
+    ene *= ( getArgument(i) + 2.0 * sigma * sigma );
   }
-  ene += std::log(sigma) + static_cast<double>(getNumberOfArguments())*std::log(pi/sqrt2/sigma);
+  ene = std::log(ene) + std::log(sigma) + static_cast<double>(getNumberOfArguments())*std::log(pi/sqrt2/sigma);
   return temp_ * ene;
 }
 
@@ -158,7 +161,7 @@ void BayesianCS::do_MC(){
  
  for(unsigned i=0;i<MCsteps_;++i){
   // propose move
-  double r = (double)rand() / RAND_MAX;
+  double r = static_cast<double>(rand()) / RAND_MAX;
   double ds = -Dsigma_ + r * 2.0 * Dsigma_;
   double new_sigma = sigma_ + ds;
   // check boundaries
@@ -167,7 +170,7 @@ void BayesianCS::do_MC(){
   // calculate new energy
   double new_energy = get_energy(new_sigma);
   // accept or reject
-  double s = (double)rand() / RAND_MAX;
+  double s = static_cast<double>(rand()) / RAND_MAX;
   double delta = exp(-(new_energy-old_energy)/temp_);
   if(s<delta){
    old_energy = new_energy;
@@ -181,26 +184,26 @@ void BayesianCS::calculate(){
   
   // do MC stuff at the right time step
   long int step = getStep();
-  if(step%MCstride_==0){do_MC();}
+  if((step+1)%MCstride_==0){do_MC();}
 
-  // cycle on dataset
-  double ene = 0.0;
+  // cycle on arguments 
+  double ene = 1.0;
   for(unsigned i=0;i<getNumberOfArguments();++i){
     double v = getArgument(i) + 2.0 * sigma_ * sigma_;
     // increment energy
-    ene += std::log(v); 
+    ene *= v; 
     // set derivatives
-    setDerivative(i, temp_/v);
+    setOutputForce(i, -temp_/v);
   };
-  ene += std::log(sigma_)+static_cast<double>(getNumberOfArguments())*std::log(pi/sqrt2/sigma_);
-  // set value
-  setValue(temp_*ene);
+  ene = std::log(ene) + std::log(sigma_) + static_cast<double>(getNumberOfArguments())*std::log(pi/sqrt2/sigma_);
+  // set value of the bias
+  valueBias->set(temp_*ene);
 
   // set value of uncertainty
   valueSigma->set(sigma_);
   // calculate acceptance
-  int MCtrials = step / MCstride_;
-  double accept = MCaccept_ / MCsteps_ / MCtrials; 
+  double MCtrials = std::floor(static_cast<double>(step+1) / static_cast<double>(MCstride_));
+  double accept = static_cast<double>(MCaccept_) / static_cast<double>(MCsteps_) / MCtrials; 
   // set value of acceptance 
   valueAccept->set(accept);
 }
