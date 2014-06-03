@@ -66,7 +66,6 @@ class BayesianCS : public Bias
   const double pi = 3.141592653589793;
   const double sqrt2 = 1.414213562373095;
   double sigma_;
-  double sigma0_;
   double sigma_min_;
   double sigma_max_;
   double Dsigma_;
@@ -112,10 +111,10 @@ void BayesianCS::registerKeywords(Keywords& keys){
 
 BayesianCS::BayesianCS(const ActionOptions&ao):
 PLUMED_BIAS_INIT(ao),
-sigma0_(1.0), sigma_min_(0.00001), sigma_max_(10.0), Dsigma_(0.1), temp_(2.494),
+sigma_(1.0), sigma_min_(0.00001), sigma_max_(10.0), Dsigma_(0.1), temp_(2.494),
 MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
 {
-  parse("SIGMA0",   sigma0_);
+  parse("SIGMA0",   sigma_);
   parse("SIGMA_MIN",sigma_min_);
   parse("SIGMA_MAX",sigma_max_);
   parse("DSIGMA",   Dsigma_);
@@ -126,7 +125,7 @@ MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
   parse("MC_SEED",  MCseed_);
   checkRead();
 
-  log.printf("  initial value of uncertainty %f\n",sigma0_);
+  log.printf("  initial value of uncertainty %f\n",sigma_);
   log.printf("  minimum value of uncertainty %f\n",sigma_min_);
   log.printf("  maximum value of uncertainty %f\n",sigma_max_);
   log.printf("  maximum MC move of the uncertainty parameter %f\n",Dsigma_);
@@ -143,8 +142,6 @@ MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
   valueSigma=getPntrToComponent("sigma");
   valueAccept=getPntrToComponent("accept");
 
-  // initialize sigma_
-  sigma_ = sigma0_;
   // initialize random seed
   srand (MCseed_);
 }
