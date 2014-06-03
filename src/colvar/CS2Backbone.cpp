@@ -25,11 +25,6 @@
 #include "ActionRegister.h"
 #include "core/PlumedMain.h"
 #include "core/Atoms.h"
-#include "tools/Communicator.h"
-
-#include <string>
-#include <cmath>
-#include <cassert>
 
 #include <almost/mdb.h>
 #include <almost/pdb.h>
@@ -56,7 +51,7 @@ HOW TO COMPILE IT
 
 In general the system for which chemical shifts are to be calculated must be completly included in
 ATOMS. It should also be made WHOLE before the the backcalculation. CamShift is included in the
-free package ALMOST v.2.1 that can be dowload via SVN (svn checkout svn://svn.code.sf.net/p/almost/code/ almost-code).
+free package ALMOST v.2.1 that can be dowloaded via SVN (svn checkout svn://svn.code.sf.net/p/almost/code/ almost-code).
 ALMOST 2.1 can be found in branches/almost-2.1/ and it can be compiled:
 
 \verbatim
@@ -141,9 +136,9 @@ PRINT ARG=cs
 class CS2Backbone : public Colvar {
   vector<CamShift2> cam_list;
   Molecules molecules;
-  int  numResidues;
-  int  pperiod;
-  int  ens_dim;
+  unsigned  numResidues;
+  unsigned  pperiod;
+  unsigned  ens_dim;
   bool ensemble;
   bool serial;
   bool isvectorial;
@@ -151,6 +146,8 @@ class CS2Backbone : public Colvar {
   double ene_pl2alm;
   double len_pl2alm;
   double for_pl2alm;
+  Coor<double> coor; 
+  Coor<double> csforces;
 public:
   CS2Backbone(const ActionOptions&);
   ~CS2Backbone();
@@ -210,7 +207,7 @@ isvectorial(false)
   int neigh_f=10;
   parse("NEIGH_FREQ", neigh_f);
 
-  int w_period=0;
+  unsigned w_period=0;
   parse("WRITE_CS", w_period);
   pperiod=w_period;
 
@@ -219,7 +216,7 @@ isvectorial(false)
   ensemble=false;
   parseFlag("ENSEMBLE",ensemble);
   if(ensemble&&comm.Get_rank()==0) {
-    if(multi_sim_comm.Get_size()<2) plumed_merror("You CANNOT run Replica-Averaged simulations without running multiple replicas!\n");
+    if(multi_sim_comm.Get_size()<2) error("You CANNOT run Replica-Averaged simulations without running multiple replicas!\n");
     else ens_dim=multi_sim_comm.Get_size(); 
   } else ens_dim=0; 
   if(ensemble) comm.Sum(&ens_dim, 1);
@@ -239,7 +236,7 @@ isvectorial(false)
   if(stringa_mol.length()>0) {
     unsigned num_chains = pdb[0].size();
     vector<string> data=Tools::getWords(stringa_mol,",");
-    if(data.size()!=2*num_chains) plumed_merror("You have to define both the NTerm and the CTerm for each chain of your system!\n");
+    if(data.size()!=2*num_chains) error("You have to define both the NTerm and the CTerm for each chain of your system!\n");
     for(unsigned i=0;i<data.size();i++) termini.push_back(data[i]);
   } else {
     unsigned num_chains = pdb[0].size();
@@ -321,7 +318,7 @@ isvectorial(false)
   if(stride>1) log.printf("  Parallelized over %u processors\n", stride);
   a.set_mpi(stride, rank);
   
-  if(ensemble) { log.printf("  ENSEMBLE averaging over %i replicas\n", ens_dim); }
+  if(ensemble) { log.printf("  ENSEMBLE averaging over %u replicas\n", ens_dim); }
 
   a.set_flat_bottom_const(grains);
   a.set_box_nupdate(neigh_f);
@@ -330,10 +327,10 @@ isvectorial(false)
 
   sh = new double*[numResidues];
   sh[0] = new double[numResidues*6];
-  for (int i=1; i<numResidues; i++)  sh[i]=sh[i-1]+6; 
+  for(unsigned i=1;i<numResidues;i++)  sh[i]=sh[i-1]+6;
   components = new double*[numResidues];
   components[0] = new double[numResidues*6];
-  for (int i=1; i<numResidues; i++)  components[i]=components[i-1]+6; 
+  for (unsigned i=1;i<numResidues;i++)  components[i]=components[i-1]+6; 
 
   /* Energy and Lenght conversion */
   ene_pl2alm = 4.186/plumed.getAtoms().getUnits().getEnergy();
@@ -351,10 +348,13 @@ isvectorial(false)
      <<plumed.cite("Kohlhoff K, Robustelli P, Cavalli A, Salvatella A, Vendruscolo M, J. Am. Chem. Soc. 131, 13894 (2009)")
      <<plumed.cite("Camilloni C, Robustelli P, De Simone A, Cavalli A, Vendruscolo M, J. Am. Chem. Soc. 134, 3968 (2012)") <<"\n";
 
+  coor.resize(atoms.size()); 
   if(!isvectorial) {
+    csforces.resize(atoms.size());
     addValueWithDerivatives();
     setNotPeriodic();
   } else {
+    csforces.resize(6*numResidues*atoms.size());
     for(int i=0; i<numResidues; i++) {
       std::string num; Tools::convert(i,num);
       addComponentWithDerivatives("ha_"+num); componentIsNotPeriodic("ha_"+num);
@@ -382,16 +382,13 @@ void CS2Backbone::calculate()
 {
   double energy=0.;
   Tensor virial;
-  virial.zero();
-  vector<Vector> deriv(getNumberOfAtoms());
-  int N = getNumberOfAtoms();
-  Coor<double> coor(N); 
+  unsigned N = getNumberOfAtoms();
 
-  for(int i=0; i<numResidues; i++) for(unsigned j=0; j<6; j++) sh[i][j]=0.;
+  for(unsigned i=0;i<numResidues;i++) for(unsigned j=0;j<6;j++) sh[i][j]=0.;
   if(getExchangeStep()) cam_list[0].set_box_count(0);
 
-  for (int i = 0; i < N; i++) {
-     int ipos = 4 * i;
+  for (unsigned i=0;i<N;i++) {
+     unsigned ipos = 4*i;
      Vector Pos = getPosition(i);
      coor.coor[ipos]   = len_pl2alm*Pos[0];
      coor.coor[ipos+1] = len_pl2alm*Pos[1];
@@ -421,55 +418,52 @@ void CS2Backbone::calculate()
     if(comm.Get_rank()==0) { // I am the master of my replica
       // among replicas
       multi_sim_comm.Sum(&sh[0][0], numResidues*6);
-      multi_sim_comm.Barrier(); 
-      for(unsigned i=0;i<6;i++) for(int j=0;j<numResidues;j++) sh[j][i] *= fact; 
-    } else for(unsigned i=0;i<6;i++) for(int j=0;j<numResidues;j++) sh[j][i] = 0.;
+      for(unsigned i=0;i<6;i++) for(unsigned j=0;j<numResidues;j++) sh[j][i] *= fact; 
+    } else for(unsigned i=0;i<6;i++) for(unsigned j=0;j<numResidues;j++) sh[j][i] = 0.;
     // inside each replica
     comm.Sum(&sh[0][0], numResidues*6);
   }
 
   if(!isvectorial){
-    Coor<double> forces(N);
-    forces.clear();
-    energy = cam_list[0].ens_energy_force(coor, forces, sh);
-    if(!serial) comm.Sum(&forces[0][0], N*4);
+    csforces.clear();
+    energy = cam_list[0].ens_energy_force(coor, csforces, sh);
+    if(!serial) comm.Sum(&csforces[0][0], N*4);
 
-    for (int i = 0; i < N; i++)
+    virial.zero();
+    for(unsigned i=0;i<N;i++)
     {
+      unsigned ipos=4*i;
+      double ff=fact*for_pl2alm;
       Vector For;
-      int ipos = 4 * i;
-      For[0] = forces.coor[ipos];
-      For[1] = forces.coor[ipos+1];
-      For[2] = forces.coor[ipos+2];
-      deriv[i] = fact*for_pl2alm*For;
-      virial=virial+(-1.*Tensor(getPosition(i),deriv[i]));
+      For[0] = ff*csforces.coor[ipos];
+      For[1] = ff*csforces.coor[ipos+1];
+      For[2] = ff*csforces.coor[ipos+2];
+      setAtomsDerivatives(i,For);
+      virial=virial+(-1.*Tensor(getPosition(i),For));
     }
-
-    for(unsigned i=0;i<getNumberOfAtoms();++i) setAtomsDerivatives(i,deriv[i]);
     setValue           (ene_pl2alm*energy);
     setBoxDerivatives  (virial);
   } else {
-    Coor<double> csforces(6*numResidues*N);
     csforces.clear();
     energy = cam_list[0].ens_energy_force(coor, csforces, sh, components, N);
     if(!serial) comm.Sum(&csforces[0][0], 6*numResidues*N*4);
 
-    for(int j = 0; j < numResidues; j++) {
-      int placeres = 4*N*6*j;
-      for(int cs=0; cs<6; cs++) {
+    for(unsigned j=0;j<numResidues;j++) {
+      unsigned placeres = 4*N*6*j;
+      for(unsigned cs=0;cs<6;cs++) {
         Value* comp=getPntrToComponent(6*j+cs);
         comp->set(ene_pl2alm*components[j][cs]);
-        int place = placeres+cs*4*N;
+        unsigned place = placeres+cs*4*N;
         virial.zero();
-        for(int i = 0; i < N; i++) {
+        for(unsigned i=0;i<N;i++) {
+          unsigned ipos = 4*i;
+          double ff=fact*for_pl2alm;
           Vector For;
-          int ipos = 4*i;
-          For[0] = csforces.coor[place+ipos];
-          For[1] = csforces.coor[place+ipos+1];
-          For[2] = csforces.coor[place+ipos+2];
-          deriv[i] = fact*for_pl2alm*For;
-          setAtomsDerivatives(comp,i,deriv[i]);
-          virial=virial+(-1.*Tensor(getPosition(i),deriv[i]));
+          For[0] = ff*csforces.coor[place+ipos];
+          For[1] = ff*csforces.coor[place+ipos+1];
+          For[2] = ff*csforces.coor[place+ipos+2];
+          setAtomsDerivatives(comp,i,For);
+          virial=virial+(-1.*Tensor(getPosition(i),For));
         }
         setBoxDerivatives(comp, virial);
       }
