@@ -29,7 +29,7 @@ using namespace std;
 namespace PLMD{
 namespace bias{
 
-//+PLUMEDOC BIAS BAYESIANCS
+//+PLUMEDOC BIAS BAYESIANGJ
 /*
 Calculate a Bayesian Score to use with the Chemical Shifts CV \ref CS2BACKBONE.
 
@@ -51,7 +51,7 @@ to print the values of the uncertainty parameter, MC acceptance, and Bayesian sc
 \verbatim
 WHOLEMOLECULES ENTITY0=1-174
 cs:  CS2BACKBONE ATOMS=1-174 DATA=data/ FF=a03_gromacs.mdb FLAT=0.0 NRES=13 ENSEMBLE COMPONENTS
-csb: BAYESIANCS ARG=(cs\.ha.*) SIGMA0=1.0 SIGMA_MIN=0.00001 SIGMA_MAX=10.0 DSIGMA=0.1 KBT=2.494 NDATA=13 MC_STEPS=1 MC_STRIDE=1 MC_SEED=1234
+csb: BAYESIANGJ ARG=cs.ha SIGMA0=1.0 SIGMA_MIN=0.00001 SIGMA_MAX=10.0 DSIGMA=0.1 KBT=2.494 NDATA=13 MC_STEPS=1 MC_STRIDE=1 MC_SEED=1234
 PRINT ARG=csb.sigma,csb.accept,csb.bias
 \endverbatim
 (See also \ref CS2BACKBONE and \ref PRINT).
@@ -61,10 +61,9 @@ PRINT ARG=csb.sigma,csb.accept,csb.bias
 //+ENDPLUMEDOC
 
 
-class BayesianCS : public Bias
+class BayesianGJ : public Bias
 {
-  const double pi = 3.141592653589793;
-  const double sqrt2 = 1.414213562373095;
+  const double sqrt2pi = 2.506628274631001;
   double sigma_;
   double sigma0_;
   double sigma_min_;
@@ -79,20 +78,21 @@ class BayesianCS : public Bias
   Value* valueBias;
   Value* valueSigma;
   Value* valueAccept;
+  Value* valueKappa;
  
   void doMonteCarlo();
   double getEnergy(double sigma);
   
 public:
-  BayesianCS(const ActionOptions&);
+  BayesianGJ(const ActionOptions&);
   void calculate();
   static void registerKeywords(Keywords& keys);
 };
 
 
-PLUMED_REGISTER_ACTION(BayesianCS,"BAYESIANCS")
+PLUMED_REGISTER_ACTION(BayesianGJ,"BAYESIANGJ")
 
-void BayesianCS::registerKeywords(Keywords& keys){
+void BayesianGJ::registerKeywords(Keywords& keys){
   Bias::registerKeywords(keys);
   keys.use("ARG");
   keys.add("compulsory","SIGMA0",   "1.0",    "initial value of the uncertainty parameter");
@@ -107,10 +107,11 @@ void BayesianCS::registerKeywords(Keywords& keys){
   componentsAreNotOptional(keys); 
   keys.addOutputComponent("bias","default","the instantaneous value of the bias potential");
   keys.addOutputComponent("sigma", "default","uncertainty parameter");
+  keys.addOutputComponent("kappa", "default","intensity of the harmonic restraint");
   keys.addOutputComponent("accept","default","MC acceptance");
 }
 
-BayesianCS::BayesianCS(const ActionOptions&ao):
+BayesianGJ::BayesianGJ(const ActionOptions&ao):
 PLUMED_BIAS_INIT(ao),
 sigma0_(1.0), sigma_min_(0.00001), sigma_max_(10.0), Dsigma_(0.1), temp_(2.494),
 MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
@@ -139,9 +140,12 @@ MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
   addComponent("bias");   componentIsNotPeriodic("bias");
   addComponent("sigma");  componentIsNotPeriodic("sigma");
   addComponent("accept"); componentIsNotPeriodic("accept");
+  addComponent("kappa");  componentIsNotPeriodic("kappa");
   valueBias=getPntrToComponent("bias");
   valueSigma=getPntrToComponent("sigma");
   valueAccept=getPntrToComponent("accept");
+  valueKappa=getPntrToComponent("kappa");
+
 
   // initialize sigma_
   sigma_ = sigma0_;
@@ -149,16 +153,16 @@ MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
   srand (MCseed_);
 }
 
-double BayesianCS::getEnergy(double sigma){
- double ene = 1.0;
+double BayesianGJ::getEnergy(double sigma){
+ double ene = 0.0;
   for(unsigned i=0;i<getNumberOfArguments();++i){
-    ene *= ( getArgument(i) + 2.0 * sigma * sigma );
+    ene += getArgument(i);
   }
-  ene = std::log(ene) + std::log(sigma) + static_cast<double>(ndata_)*std::log(pi/sqrt2/sigma);
+  ene = ene/2.0/sigma/sigma + std::log(sigma) + static_cast<double>(ndata_)*std::log(sigma*sqrt2pi);
   return temp_ * ene;
 }
 
-void BayesianCS::doMonteCarlo(){
+void BayesianGJ::doMonteCarlo(){
  
  // store old energy
  double old_energy = getEnergy(sigma_);
@@ -184,27 +188,28 @@ void BayesianCS::doMonteCarlo(){
  }
 }
 
-void BayesianCS::calculate(){
+void BayesianGJ::calculate(){
   
   // do MC stuff at the right time step
   long int step = getStep();
   if((step+1)%MCstride_==0){doMonteCarlo();}
 
   // cycle on arguments 
-  double ene = 1.0;
+  double ene = 0.0;
   for(unsigned i=0;i<getNumberOfArguments();++i){
-    double v = getArgument(i) + 2.0 * sigma_ * sigma_;
     // increment energy
-    ene *= v; 
+    ene += getArgument(i); 
     // set derivatives
-    setOutputForce(i, -temp_/v);
+    setOutputForce(i, -temp_/2.0/sigma_/sigma_);
   };
-  ene = std::log(ene) + std::log(sigma_) + static_cast<double>(ndata_)*std::log(pi/sqrt2/sigma_);
- 
+  ene = ene/2.0/sigma_/sigma_ + std::log(sigma_) + static_cast<double>(ndata_)*std::log(sigma_*sqrt2pi);
+
   // set value of the bias
   valueBias->set(temp_*ene);
   // set value of uncertainty
   valueSigma->set(sigma_);
+  // and of the harmonic restraint on coordinates
+  valueKappa->set(temp_/2.0/sigma_/sigma_);
   // calculate acceptance
   double MCtrials = std::floor(static_cast<double>(step+1) / static_cast<double>(MCstride_));
   double accept = static_cast<double>(MCaccept_) / static_cast<double>(MCsteps_) / MCtrials; 
