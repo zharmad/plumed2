@@ -204,8 +204,8 @@ void BayesianGJ::calculate(){
   valueBias->set(temp_*ene);
   // set value of uncertainty
   valueSigma->set(sigma_);
-  // and of the harmonic restraint on coordinates
-  valueKappa->set(temp_/2.0/sigma_/sigma_);
+  // and of the harmonic restraint
+  valueKappa->set(temp_/sigma_/sigma_);
   // calculate acceptance
   double MCtrials = std::floor(static_cast<double>(step+1) / static_cast<double>(MCstride_));
   double accept = static_cast<double>(MCaccept_) / static_cast<double>(MCsteps_) / MCtrials; 
