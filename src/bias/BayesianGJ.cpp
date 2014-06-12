@@ -74,6 +74,7 @@ class BayesianGJ : public Bias
   int MCstride_;
   unsigned int MCseed_;
   unsigned int MCaccept_;
+  unsigned int MCfirst_;
   Value* valueBias;
   Value* valueSigma;
   Value* valueAccept;
@@ -113,7 +114,7 @@ void BayesianGJ::registerKeywords(Keywords& keys){
 BayesianGJ::BayesianGJ(const ActionOptions&ao):
 PLUMED_BIAS_INIT(ao),
 sigma_(1.0), sigma_min_(0.00001), sigma_max_(10.0), Dsigma_(0.1), temp_(2.494),
-MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0)
+MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0), MCfirst_(0)
 {
   parse("SIGMA0",   sigma_);
   parse("SIGMA_MIN",sigma_min_);
@@ -188,7 +189,9 @@ void BayesianGJ::calculate(){
   
   // do MC stuff at the right time step
   long int step = getStep();
-  if((step+1)%MCstride_==0){doMonteCarlo();}
+  if(step%MCstride_==0){doMonteCarlo();}
+
+  if(MCfirst_==0){MCfirst_=step;}
 
   // cycle on arguments 
   double ene = 0.0;
@@ -207,7 +210,7 @@ void BayesianGJ::calculate(){
   // and of the harmonic restraint
   valueKappa->set(temp_/sigma_/sigma_);
   // calculate acceptance
-  double MCtrials = std::floor(static_cast<double>(step+1) / static_cast<double>(MCstride_));
+  double MCtrials = std::floor(static_cast<double>(step-MCfirst_) / static_cast<double>(MCstride_))+1.0;
   double accept = static_cast<double>(MCaccept_) / static_cast<double>(MCsteps_) / MCtrials; 
   // set value of acceptance 
   valueAccept->set(accept);
