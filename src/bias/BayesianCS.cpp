@@ -75,7 +75,7 @@ class BayesianCS : public Bias
   int MCstride_;
   unsigned int MCseed_;
   unsigned int MCaccept_;
-  unsigned int MCfirst_;
+  long int MCfirst_;
   Value* valueBias;
   Value* valueSigma;
   Value* valueAccept;
@@ -113,7 +113,7 @@ void BayesianCS::registerKeywords(Keywords& keys){
 BayesianCS::BayesianCS(const ActionOptions&ao):
 PLUMED_BIAS_INIT(ao),
 sigma_(1.0), sigma_min_(0.00001), sigma_max_(10.0), Dsigma_(0.1), temp_(2.494),
-MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0), MCfirst_(0)
+MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0), MCfirst_(-1)
 {
   parse("SIGMA0",   sigma_);
   parse("SIGMA_MIN",sigma_min_);
@@ -188,7 +188,7 @@ void BayesianCS::calculate(){
   long int step = getStep();
   if(step%MCstride_==0){doMonteCarlo();}
 
-  if(MCfirst_==0){MCfirst_=step;}
+  if(MCfirst_==-1){MCfirst_=step;}
 
   // cycle on arguments 
   double ene = 1.0;
