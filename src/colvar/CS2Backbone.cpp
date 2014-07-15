@@ -128,7 +128,8 @@ class CS2Backbone : public Colvar {
   unsigned  ens_dim;
   bool ensemble;
   bool serial;
-  double **sh;
+  bool isvectorial;
+  double **sh, **components;
   double ene_pl2alm;
   double len_pl2alm;
   double for_pl2alm;
@@ -145,7 +146,9 @@ PLUMED_REGISTER_ACTION(CS2Backbone,"CS2BACKBONE")
 
 void CS2Backbone::registerKeywords( Keywords& keys ){
   Colvar::registerKeywords( keys );
+  componentsAreNotOptional(keys);
   keys.addFlag("SERIAL",false,"Perform the calculation in serial - for debug purpose.");
+  keys.addFlag("COMPONENTS",false,"Each squared difference between calculated and experimental chemical shifts is used as a component");
   keys.add("atoms","ATOMS","The atoms to be included in the calculation, e.g. the whole protein.");
   keys.add("compulsory","DATA","data/","The folder with the experimental chemical shifts.");
   keys.add("compulsory","FF","a03_gromacs.mdb","The ALMOST force-field to map the atoms' names.");
@@ -155,12 +158,19 @@ void CS2Backbone::registerKeywords( Keywords& keys ){
   keys.add("compulsory","NRES","Number of residues, corresponding to the number of chemical shifts.");
   keys.add("optional","TERMINI","Defines the protonation states of the chain-termini.");
   keys.addFlag("CYS-DISU",false,"Set to TRUE if your system has disulphide bridges.");  
-  keys.addFlag("ENSEMBLE",false,"Set to TRUE if you want to average over multiple replicas.");  
+  keys.addFlag("ENSEMBLE",false,"Set to TRUE if you want to average over multiple replicas.");
+  keys.addOutputComponent("ha_","COMPONENTS","the squared difference between calculated and experimental HA carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("hn_","COMPONENTS","the squared difference between calculated and experimental HN carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("nh_","COMPONENTS","the squared difference between calculated and experimental NH carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("ca_","COMPONENTS","the squared difference between calculated and experimental CA carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("cb_","COMPONENTS","the squared difference between calculated and experimental CB carbon chemical shifts for residue #"); 
+  keys.addOutputComponent("co_","COMPONENTS","the squared difference between calculated and experimental CO carbon chemical shifts for residue #"); 
   keys.remove("NOPBC");
 }
 
 CS2Backbone::CS2Backbone(const ActionOptions&ao):
-PLUMED_COLVAR_INIT(ao)
+PLUMED_COLVAR_INIT(ao),
+isvectorial(false)
 {
   string stringadb;
   string stringamdb;
@@ -219,6 +229,8 @@ PLUMED_COLVAR_INIT(ao)
     unsigned num_chains = pdb[0].size();
     for(unsigned i=0;i<(2*num_chains);i++) termini.push_back("DEFAULT");
   }
+
+  parseFlag("COMPONENTS",isvectorial);
 
   log.printf("  building molecule ..."); log.flush();
   for(unsigned i=0;i<pdb[0].size();i++){
@@ -303,6 +315,9 @@ PLUMED_COLVAR_INIT(ao)
   sh = new double*[numResidues];
   sh[0] = new double[numResidues*6];
   for(unsigned i=1;i<numResidues;i++)  sh[i]=sh[i-1]+6;
+  components = new double*[numResidues];
+  components[0] = new double[numResidues*6];
+  for (unsigned i=1;i<numResidues;i++)  components[i]=components[i-1]+6; 
 
   /* Energy and Lenght conversion */
   ene_pl2alm = 4.186/plumed.getAtoms().getUnits().getEnergy();
@@ -320,12 +335,28 @@ PLUMED_COLVAR_INIT(ao)
      <<plumed.cite("Kohlhoff K, Robustelli P, Cavalli A, Salvatella A, Vendruscolo M, J. Am. Chem. Soc. 131, 13894 (2009)")
      <<plumed.cite("Camilloni C, Robustelli P, De Simone A, Cavalli A, Vendruscolo M, J. Am. Chem. Soc. 134, 3968 (2012)") <<"\n";
 
-
   coor.resize(atoms.size()); 
   csforces.resize(atoms.size()); 
 
   addValueWithDerivatives();
   setNotPeriodic();
+  coor.resize(atoms.size()); 
+  if(!isvectorial) {
+    csforces.resize(atoms.size());
+    addValueWithDerivatives();
+    setNotPeriodic();
+  } else {
+    csforces.resize(6*numResidues*atoms.size());
+    for(int i=0; i<numResidues; i++) {
+      std::string num; Tools::convert(i,num);
+      addComponentWithDerivatives("ha_"+num); componentIsNotPeriodic("ha_"+num);
+      addComponentWithDerivatives("hn_"+num); componentIsNotPeriodic("hn_"+num);
+      addComponentWithDerivatives("nh_"+num); componentIsNotPeriodic("nh_"+num);
+      addComponentWithDerivatives("ca_"+num); componentIsNotPeriodic("ca_"+num);
+      addComponentWithDerivatives("cb_"+num); componentIsNotPeriodic("cb_"+num);
+      addComponentWithDerivatives("co_"+num); componentIsNotPeriodic("co_"+num);
+    }
+  }
   requestAtoms(atoms);
   log.printf("  DONE!\n"); log.flush();
 }
@@ -334,14 +365,19 @@ CS2Backbone::~CS2Backbone()
 {
   delete[] sh[0];
   delete[] sh;
+  delete[] components[0];
+  delete[] components;
 }
 
 void CS2Backbone::calculate()
 {
+  Tensor virial;
+  double energy;
+  unsigned N = getNumberOfAtoms();
+
   for(unsigned i=0;i<numResidues;i++) for(unsigned j=0;j<6;j++) sh[i][j]=0.;
   if(getExchangeStep()) cam_list[0].set_box_count(0);
 
-  unsigned N = getNumberOfAtoms();
   for (unsigned i=0;i<N;i++) {
      unsigned ipos = 4*i;
      Vector Pos = getPosition(i);
@@ -379,28 +415,50 @@ void CS2Backbone::calculate()
     comm.Sum(&sh[0][0], numResidues*6);
   }
 
-  csforces.clear();
-  double energy;
-  energy = cam_list[0].ens_energy_force(coor, csforces, sh);
-  if(!serial) comm.Sum(&csforces[0][0], N*4);
-
-  Tensor virial;
-  virial.zero();
   double ff=fact*for_pl2alm;
   Vector For;
-  for(unsigned i=0;i<N;i++)
-  {
-    unsigned ipos=4*i;
-    For[0] = ff*csforces.coor[ipos];
-    For[1] = ff*csforces.coor[ipos+1];
-    For[2] = ff*csforces.coor[ipos+2];
-    setAtomsDerivatives(i,For);
-    virial=virial+(-1.*Tensor(getPosition(i),For));
-  }
+  if(!isvectorial){
+    csforces.clear();
+    energy = cam_list[0].ens_energy_force(coor, csforces, sh);
+    if(!serial) comm.Sum(&csforces[0][0], N*4);
 
-  setValue           (ene_pl2alm*energy);
-  setBoxDerivatives  (virial);
-}
+    virial.zero();
+    for(unsigned i=0;i<N;i++)
+    {
+      unsigned ipos=4*i;
+      For[0] = ff*csforces.coor[ipos];
+      For[1] = ff*csforces.coor[ipos+1];
+      For[2] = ff*csforces.coor[ipos+2];
+      setAtomsDerivatives(i,For);
+      virial=virial+(-1.*Tensor(getPosition(i),For));
+    }
+    setValue           (ene_pl2alm*energy);
+    setBoxDerivatives  (virial);
+  } else {
+    csforces.clear();
+    energy = cam_list[0].ens_energy_force(coor, csforces, sh, components, N);
+    if(!serial) comm.Sum(&csforces[0][0], 6*numResidues*N*4);
+
+    for(unsigned j=0;j<numResidues;j++) {
+      unsigned placeres = 4*N*6*j;
+      for(unsigned cs=0;cs<6;cs++) {
+        Value* comp=getPntrToComponent(6*j+cs);
+        comp->set(ene_pl2alm*components[j][cs]);
+        unsigned place = placeres+cs*4*N;
+        virial.zero();
+        for(unsigned i=0;i<N;i++) {
+          unsigned ipos = 4*i;
+          For[0] = ff*csforces.coor[place+ipos];
+          For[1] = ff*csforces.coor[place+ipos+1];
+          For[2] = ff*csforces.coor[place+ipos+2];
+          setAtomsDerivatives(comp,i,For);
+          virial=virial+(-1.*Tensor(getPosition(i),For));
+        }
+        setBoxDerivatives(comp, virial);
+      }
+    }
+  }
+} 
 
 }
 #endif
