@@ -336,11 +336,6 @@ isvectorial(false)
      <<plumed.cite("Camilloni C, Robustelli P, De Simone A, Cavalli A, Vendruscolo M, J. Am. Chem. Soc. 134, 3968 (2012)") <<"\n";
 
   coor.resize(atoms.size()); 
-  csforces.resize(atoms.size()); 
-
-  addValueWithDerivatives();
-  setNotPeriodic();
-  coor.resize(atoms.size()); 
   if(!isvectorial) {
     csforces.resize(atoms.size());
     addValueWithDerivatives();
