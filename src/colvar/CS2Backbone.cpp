@@ -126,10 +126,12 @@ class CS2Backbone : public Colvar {
   unsigned  numResidues;
   unsigned  pperiod;
   unsigned  ens_dim;
+  unsigned  my_repl;
+  std::list<unsigned> repl_list;
   bool ensemble;
   bool serial;
   bool isvectorial;
-  double **sh, **components;
+  double ***allsh, **sh, **components;
   double ene_pl2alm;
   double len_pl2alm;
   double for_pl2alm;
@@ -159,6 +161,7 @@ void CS2Backbone::registerKeywords( Keywords& keys ){
   keys.add("optional","TERMINI","Defines the protonation states of the chain-termini.");
   keys.addFlag("CYS-DISU",false,"Set to TRUE if your system has disulphide bridges.");  
   keys.addFlag("ENSEMBLE",false,"Set to TRUE if you want to average over multiple replicas.");
+  keys.add("compulsory","REPLICAS","List of replicas for the averaging");
   keys.addOutputComponent("ha_","COMPONENTS","the squared difference between calculated and experimental HA carbon chemical shifts for residue #"); 
   keys.addOutputComponent("hn_","COMPONENTS","the squared difference between calculated and experimental HN carbon chemical shifts for residue #"); 
   keys.addOutputComponent("nh_","COMPONENTS","the squared difference between calculated and experimental NH carbon chemical shifts for residue #"); 
@@ -204,9 +207,13 @@ isvectorial(false)
   parseFlag("ENSEMBLE",ensemble);
   if(ensemble&&comm.Get_rank()==0) {
     if(multi_sim_comm.Get_size()<2) error("You CANNOT run Replica-Averaged simulations without running multiple replicas!\n");
-    else ens_dim=multi_sim_comm.Get_size(); 
-  } else ens_dim=0; 
-  if(ensemble) comm.Sum(&ens_dim, 1);
+    else {ens_dim=multi_sim_comm.Get_size(); my_repl=multi_sim_comm.Get_rank();}
+  } else {ens_dim=0; my_repl=0;}
+  if(ensemble) {comm.Sum(&ens_dim, 1); comm.Sum(&my_repl, 1); }
+
+  vector<unsigned> replicas;
+  parseVector( "REPLICAS", replicas );
+  std::copy( replicas.begin(), replicas.end(), std::back_inserter( repl_list ) );
 
   stringadb  = stringa_data + string("/camshift.db");
   stringamdb = stringa_data + string("/") + stringa_forcefield;
@@ -312,6 +319,9 @@ isvectorial(false)
   a.set_lambda(1);
   cam_list.push_back(a);
 
+  allsh = new double**[ens_dim];
+  allsh[0] = new double*[numResidues];
+  allsh[0][0] = new double[numResidues*6];
   sh = new double*[numResidues];
   sh[0] = new double[numResidues*6];
   for(unsigned i=1;i<numResidues;i++)  sh[i]=sh[i-1]+6;
@@ -358,6 +368,9 @@ isvectorial(false)
 
 CS2Backbone::~CS2Backbone()
 {
+  delete[] allsh[0][0];
+  delete[] allsh[0];
+  delete[] allsh;
   delete[] sh[0];
   delete[] sh;
   delete[] components[0];
@@ -380,8 +393,8 @@ void CS2Backbone::calculate()
      coor.coor[ipos+1] = len_pl2alm*Pos[1];
      coor.coor[ipos+2] = len_pl2alm*Pos[2];
   }
-  cam_list[0].ens_return_shifts(coor, sh);
-  if(!serial) comm.Sum(&sh[0][0], numResidues*6);
+  cam_list[0].ens_return_shifts(coor, allsh[my_repl]);
+  if(!serial) comm.Sum(&allsh[0][0][0], ens_dim*numResidues*6);
 
   bool printout=false;
   if(pperiod>0&&comm.Get_rank()==0) printout = (!(getStep()%pperiod));
@@ -400,11 +413,14 @@ void CS2Backbone::calculate()
 
   double fact=1.0;
   if(ensemble) {
-    fact = 1./((double) ens_dim);
+    //fact = 1./((double) ens_dim);
+    fact = 1./((double) repl_list.size());
     if(comm.Get_rank()==0) { // I am the master of my replica
       // among replicas
-      multi_sim_comm.Sum(&sh[0][0], numResidues*6);
-      for(unsigned i=0;i<6;i++) for(unsigned j=0;j<numResidues;j++) sh[j][i] *= fact; 
+      multi_sim_comm.Sum(&allsh[0][0][0], ens_dim*numResidues*6);
+      for(std::list<unsigned>::iterator k = repl_list.begin(); k != repl_list.end(); k++) {
+          for(unsigned i=0;i<6;i++) for(unsigned j=0;j<numResidues;j++) sh[j][i] += allsh[*k][j][i]*fact;
+      }
     } else for(unsigned i=0;i<6;i++) for(unsigned j=0;j<numResidues;j++) sh[j][i] = 0.;
     // inside each replica
     comm.Sum(&sh[0][0], numResidues*6);
