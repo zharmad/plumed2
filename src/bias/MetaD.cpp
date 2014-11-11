@@ -642,7 +642,7 @@ isFirstStep(true)
    ifilesnames.push_back(fname);
    if(ifile->FileExist(fname)){
     ifile->open(fname);
-    if(plumed.getRestart()){
+    if(plumed.getRestart() or mw_n_>1 ){  // if mw is activate and the file is there, then read the gaussians. Should do nothing if nothing is found
      log.printf("  Restarting from %s:",ifilesnames[i].c_str());                  
      readGaussians(ifiles[i]);                                                    
     }
