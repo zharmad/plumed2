@@ -1107,8 +1107,11 @@ void MetaD::update(){
 // if multiple walkers and time to read Gaussians
  if(mw_n_>1 && getStep()%mw_rstride_==0){
    for(int i=0;i<mw_n_;++i){
-    // don't read your own Gaussians
-    if(i==mw_id_) continue;
+    // don't read your own Gaussians but flush anyway so that the other will be updated
+    if(i==mw_id_){
+         if(ifiles[i]->isOpen()) ifiles[i]->flush();	 		
+	 continue;
+    } 	
     // if the file is not open yet 
     if(!(ifiles[i]->isOpen())){
      // check if it exists now and open it!
