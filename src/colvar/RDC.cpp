@@ -144,7 +144,7 @@ void RDC::registerKeywords( Keywords& keys ){
                              "Keywords like ATOMS1, ATOMS2, ATOMS3,... should be listed and one dipolar coupling will be "
                              "calculated for each ATOMS keyword you specify.");
   keys.reset_style("ATOMS","atoms");
-  keys.add("compulsory","TYPE","STANDARD","The type of calculation relative to the Residual Dipolar Coupling");
+  keys.add("compulsory","TYPE","QFACTOR","The type of calculation relative to the Residual Dipolar Coupling");
   keys.add("numbered","COUPLING","Add an experimental value for each coupling. ");
   keys.add("numbered","GYROM","Add the product of the gyromagnetic constants for each bond. ");
   keys.add("numbered","SCALE","Add a scaling factor to take into account concentration and other effects. ");
@@ -176,7 +176,7 @@ type(QF)
   std::string What;
   parse("TYPE",What);
   if(What=="QFACTOR")          type=QF;
-  else if(What=="STANDARDEV")  type=SDEV;
+  else if(What=="SQUAREDEV")   type=SDEV;
   else if(What=="CORRELATION") type=CORR;
   else if(What=="COMPONENTS")  type=COMP;
   else if(What=="SVD")         type=SVD;
