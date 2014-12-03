@@ -114,7 +114,7 @@ PRINT ARG=nh,rdce.bias FILE=colvar
 
 class RDC : public Colvar {
 private:
-  enum CV_TYPE   {STD, CORR, COMP, SVD};
+  enum CV_TYPE   {QF, SDEV, CORR, COMP, SVD};
   const double   Const;
   vector<double> coupl;
   vector<double> mu_s;
@@ -129,7 +129,7 @@ public:
   RDC(const ActionOptions&);
   static void registerKeywords( Keywords& keys );
   virtual void calculate();
-  virtual void std_calc();
+  virtual void qf_calc(bool qf);
   virtual void corr_calc();
   virtual void comp_calc();
   virtual void svd_calc();
@@ -157,7 +157,7 @@ void RDC::registerKeywords( Keywords& keys ){
 RDC::RDC(const ActionOptions&ao):
 PLUMED_COLVAR_INIT(ao),
 Const(0.3356806),
-type(STD)
+type(QF)
 {
   // Read in the atoms
   vector<AtomNumber> t, atoms;
@@ -175,7 +175,8 @@ type(STD)
 
   std::string What;
   parse("TYPE",What);
-  if(What=="STANDARD")         type=STD;
+  if(What=="QFACTOR")          type=QF;
+  else if(What=="STANDARDEV")  type=SDEV;
   else if(What=="CORRELATION") type=CORR;
   else if(What=="COMPONENTS")  type=COMP;
   else if(What=="SVD")         type=SVD;
@@ -250,7 +251,7 @@ type(STD)
 
   checkRead();
 
-  if(type==STD||type==CORR) {
+  if(type==QF||type==SDEV||type==CORR) {
     addValueWithDerivatives();
     setNotPeriodic();
   } else if(type==COMP) {
@@ -274,14 +275,15 @@ type(STD)
 void RDC::calculate()
 {
   switch(type) {
-    case STD:  std_calc();  break;
-    case CORR: corr_calc(); break;
-    case COMP: comp_calc(); break;
-    case SVD:  svd_calc();  break;
+    case QF:   qf_calc(true);  break;
+    case SDEV: qf_calc(false); break;
+    case CORR: corr_calc();    break;
+    case COMP: comp_calc();    break;
+    case SVD:  svd_calc();     break;
   }
 }
 
-void RDC::std_calc()
+void RDC::qf_calc(bool qf)
 {
   double score=0.;
   vector<double> rdc( coupl.size() );
@@ -378,8 +380,13 @@ void RDC::std_calc()
   virial.zero();
   vector<Vector> deriv(N);
   if(!serial) comm.Sum(score);
-  score /= norm;
-  double tmpder = 2.*fact/norm;
+
+  double tmpder = 2.*fact;
+  if(qf) {
+    score  /= norm;
+    tmpder /= norm;
+  } 
+
   for(unsigned r=rank;r<N;r+=stride) {
     deriv[r]   = tmpder*dRDC[r];
     deriv[r+1] = tmpder*dRDC[r+1];
