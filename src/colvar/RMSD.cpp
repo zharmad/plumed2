@@ -37,6 +37,7 @@ class RMSD : public Colvar {
 	
   PLMD::RMSDBase* rmsd;
   bool squared; 
+  bool refder; 
 
 public:
   RMSD(const ActionOptions&);
@@ -147,10 +148,11 @@ void RMSD::registerKeywords(Keywords& keys){
   keys.add("compulsory","REFERENCE","a file in pdb format containing the reference structure and the atoms involved in the CV.");
   keys.add("compulsory","TYPE","SIMPLE","the manner in which RMSD alignment is performed.  Should be OPTIMAL or SIMPLE.");
   keys.addFlag("SQUARED",false," This should be setted if you want MSD instead of RMSD ");
+  keys.addFlag("REFDER",false," This add the derivatives of the reference system as components");
 }
 
 RMSD::RMSD(const ActionOptions&ao):
-PLUMED_COLVAR_INIT(ao),squared(false)
+PLUMED_COLVAR_INIT(ao),rmsd(log),squared(false),refder(false)
 {
   string reference;
   parse("REFERENCE",reference);
@@ -158,11 +160,14 @@ PLUMED_COLVAR_INIT(ao),squared(false)
   type.assign("SIMPLE");
   parse("TYPE",type);
   parseFlag("SQUARED",squared);
+  parseFlag("REFDER",refder);
 
   checkRead();
 
 
-  addValueWithDerivatives(); setNotPeriodic();
+  if(!refder){ addValueWithDerivatives(); setNotPeriodic(); }else{
+	addComponentWithDerivatives(string("rmsd")); componentIsNotPeriodic(string("rmsd"));
+  }
   PDB pdb;
 
   // read everything in ang and transform to nm if we are not in natural units
@@ -180,6 +185,24 @@ PLUMED_COLVAR_INIT(ao),squared(false)
   log.printf("  which contains %d atoms\n",getNumberOfAtoms());
   log.printf("  method for alignment : %s \n",type.c_str() );
   if(squared)log.printf("  chosen to use SQUARED option for MSD instead of RMSD\n");
+  if(refder){
+  	log.printf("  chosen to use REFDER to add derivatives of reference frame as values\n");
+	// loop over all the atoms, create a label, add as derivative 
+	//
+ 	std::vector<AtomNumber> at=pdb.getAtomNumbers();		
+	for(unsigned i=0;i<at.size();i++){
+		ostringstream oo;
+		oo<<"refder_"<<at[i].serial()<<"_x";
+	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		oo.str("");
+		oo<<"refder_"<<at[i].serial()<<"_y";
+	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		oo.str("");
+		oo<<"refder_"<<at[i].serial()<<"_z";
+	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+	
+	}
+  }
 }
 
 RMSD::~RMSD(){
