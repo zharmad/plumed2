@@ -129,9 +129,8 @@ public:
   RDC(const ActionOptions&);
   static void registerKeywords( Keywords& keys );
   virtual void calculate();
-  virtual void qf_calc(bool qf);
+  virtual void qf_calc(bool qf, bool docomp);
   virtual void corr_calc();
-  virtual void comp_calc();
   virtual void svd_calc();
 };
 
@@ -151,7 +150,7 @@ void RDC::registerKeywords( Keywords& keys ){
   keys.add("compulsory","WRITE_DC","0","Write the back-calculated dipolar couplings every # steps.");
   keys.addFlag("ENSEMBLE",false,"Set to TRUE if you want to average over multiple replicas.");  
   keys.addFlag("SERIAL",false,"Set to TRUE if you want to run the CV in serial.");  
-  keys.addOutputComponent("bond_","COMPONENTS","the RDC for bond #");
+  keys.addOutputComponent("bond_","COMPONENTS","the squared deviation of the RDC for bond #");
 }
 
 RDC::RDC(const ActionOptions&ao):
@@ -275,15 +274,15 @@ type(QF)
 void RDC::calculate()
 {
   switch(type) {
-    case QF:   qf_calc(true);  break;
-    case SDEV: qf_calc(false); break;
-    case CORR: corr_calc();    break;
-    case COMP: comp_calc();    break;
-    case SVD:  svd_calc();     break;
+    case QF:   qf_calc(true,false);  break;
+    case SDEV: qf_calc(false,false); break;
+    case CORR: corr_calc();          break;
+    case COMP: qf_calc(false,true);  break;
+    case SVD:  svd_calc();           break;
   }
 }
 
-void RDC::qf_calc(bool qf)
+void RDC::qf_calc(bool qf, bool docomp)
 {
   double score=0.;
   vector<double> rdc( coupl.size() );
@@ -387,22 +386,38 @@ void RDC::qf_calc(bool qf)
     tmpder /= norm;
   } 
 
-  for(unsigned r=rank;r<N;r+=stride) {
-    deriv[r]   = tmpder*dRDC[r];
-    deriv[r+1] = tmpder*dRDC[r+1];
-    virial=virial+(-1.*Tensor(getPosition(r),deriv[r]));
-    virial=virial+(-1.*Tensor(getPosition(r+1),deriv[r+1]));
+  if(!docomp) {
+    for(unsigned r=rank;r<N;r+=stride) {
+      deriv[r]   = tmpder*dRDC[r];
+      deriv[r+1] = tmpder*dRDC[r+1];
+      virial=virial+(-1.*Tensor(getPosition(r),deriv[r]));
+      virial=virial+(-1.*Tensor(getPosition(r+1),deriv[r+1]));
+    }
+
+    if(!serial){
+      if(!deriv.empty()) comm.Sum(&deriv[0][0],3*deriv.size());
+      comm.Sum(virial);
+    }
+
+    for(unsigned i=0;i<N;i++) setAtomsDerivatives(i,deriv[i]);
+    setValue           (score);
+    setBoxDerivatives  (virial);
+
+  } else {
+
+    unsigned index=0;
+    for(unsigned r=0;r<N;r+=2) {
+      Value* val=getPntrToComponent(index);
+      virial= -Tensor(getPosition(r),tmpder*dRDC[r  ])-Tensor(getPosition(r+1),tmpder*dRDC[r+1]);
+      setAtomsDerivatives( val, r  , tmpder*dRDC[r  ]);
+      setAtomsDerivatives( val, r+1, tmpder*dRDC[r+1]); 
+      setBoxDerivatives( val, virial );
+      double delta = (rdc[index]-coupl[index])*(rdc[index]-coupl[index]);
+      val->set(delta);
+      index++;
+    }
+
   }
-
-  if(!serial){
-    if(!deriv.empty()) comm.Sum(&deriv[0][0],3*deriv.size());
-    comm.Sum(virial);
-  }
-
-  for(unsigned i=0;i<N;i++) setAtomsDerivatives(i,deriv[i]);
-  setValue           (score);
-  setBoxDerivatives  (virial);
-
 }
 
 void RDC::corr_calc()
@@ -534,94 +549,6 @@ void RDC::corr_calc()
   for(unsigned i=0;i<N;i++) setAtomsDerivatives(i,deriv[i]);
   setValue           (score);
   setBoxDerivatives  (virial);
-}
-
-void RDC::comp_calc()
-{
-  vector<double> rdc( coupl.size() );
-  unsigned N = getNumberOfAtoms();
-  vector<Vector> dRDC(N);
-
-  // internal parallelisation
-  unsigned stride=2*comm.Get_size();
-  unsigned rank=2*comm.Get_rank();
-  if(serial){
-    stride=2;
-    rank=0;
-  }
-
-  /* RDC Calculations and forces */
-  for(unsigned r=rank;r<N;r+=stride)
-  {
-    unsigned index=r/2;
-    Vector distance;
-    distance=pbcDistance(getPosition(r),getPosition(r+1));
-    double d    = distance.modulo();
-    double ind  = 1./d;
-    double id3  = ind*ind*ind; 
-    double id7  = id3*id3*ind;
-    double id9  = id7*ind*ind;
-    double max  = -Const*scale[index]*mu_s[index];
-    double dmax = id3*max;
-    double cos_theta = distance[2]*ind;
-    rdc[index] = 0.5*dmax*(3.*cos_theta*cos_theta-1.);
-    double x2=distance[0]*distance[0];
-    double y2=distance[1]*distance[1];
-    double z2=distance[2]*distance[2];
-    double prod = -max*id7*(1.5*x2 +1.5*y2 -6.*z2);
-    dRDC[r][0] = prod*distance[0];
-    dRDC[r][1] = prod*distance[1];
-    dRDC[r][2] = -max*id9*distance[2]*(4.5*x2*x2 + 4.5*y2*y2 + 1.5*y2*z2 - 3.*z2*z2 + x2*(9.*y2 + 1.5*z2));
-    dRDC[r+1] = -dRDC[r];
-  }
-
-  // Printout
-  bool printout=false;
-  if(pperiod>0) printout = (!(getStep()%pperiod));
-  if(printout) {
-    // share the calculated rdc
-    if(!serial) comm.Sum(&rdc[0],rdc.size());
-    // only the master replica is going to write
-    if(comm.Get_rank()==0) {
-      char tmp1[21]; sprintf(tmp1, "%ld", getStep()); 
-      string dcfile = string("rdc-")+getLabel()+"-"+tmp1+string(".dat");
-      FILE *outfile = fopen(dcfile.c_str(), "w");
-      fprintf(outfile, "#index calc\n");
-      for(unsigned r=0;r<coupl.size();r++) { 
-        fprintf(outfile," %4u %10.6f\n", r, rdc[r]);
-      }
-      fclose(outfile);
-    }
-  }
-
-  // Ensemble averaging
-  double fact=1.0;
-  if(ensemble) {
-    fact = 1./((double) ens_dim);
-    // share the calculated rdc
-    if(!serial) comm.Sum(&rdc[0],rdc.size());
-    // I am the master of my replica
-    if(comm.Get_rank()==0) {
-      // among replicas
-      multi_sim_comm.Sum(&rdc[0], coupl.size() );
-      for(unsigned i=0;i<coupl.size();i++) rdc[i] *= fact; 
-    } else for(unsigned i=0;i<coupl.size();i++) rdc[i] = 0.;
-    // inside each replica
-    comm.Sum(&rdc[0], coupl.size() );
-  }
-
-  Tensor virial;
-  unsigned index=0;
-  for(unsigned r=0;r<N;r+=2) {
-    Value* val=getPntrToComponent(index);
-    virial= -Tensor(getPosition(r),fact*dRDC[r  ])-Tensor(getPosition(r+1),fact*dRDC[r+1]);
-    setAtomsDerivatives( val, r  , fact*dRDC[r  ]);
-    setAtomsDerivatives( val, r+1, fact*dRDC[r+1]); 
-    setBoxDerivatives( val, virial );
-    val->set(rdc[index]);
-    index++;
-  }
-
 }
 
 void RDC::svd_calc()
