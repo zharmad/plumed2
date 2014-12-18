@@ -162,12 +162,12 @@ void CS2Backbone::registerKeywords( Keywords& keys ){
   keys.addFlag("CYS-DISU",false,"Set to TRUE if your system has disulphide bridges.");  
   keys.addFlag("ENSEMBLE",false,"Set to TRUE if you want to average over multiple replicas.");
   keys.add("optional","REPLICAS","List of replicas for the averaging");
-  keys.addOutputComponent("ha_","COMPONENTS","the calculated HA carbon chemical shift for residue #"); 
-  keys.addOutputComponent("hn_","COMPONENTS","the calculated HN carbon chemical shift for residue #"); 
-  keys.addOutputComponent("nh_","COMPONENTS","the calculated NH carbon chemical shift for residue #"); 
-  keys.addOutputComponent("ca_","COMPONENTS","the calculated CA carbon chemical shift for residue #"); 
-  keys.addOutputComponent("cb_","COMPONENTS","the calculated CB carbon chemical shift for residue #"); 
-  keys.addOutputComponent("co_","COMPONENTS","the calculated CO carbon chemical shift for residue #"); 
+  keys.addOutputComponent("ha_","COMPONENTS","the calculated squared differences for Ha hydrogen chemical shifts"); 
+  keys.addOutputComponent("hn_","COMPONENTS","the calculated squared differences for H hydrogen chemical shifts"); 
+  keys.addOutputComponent("nh_","COMPONENTS","the calculated squared differences for N nitrogen chemical shifts"); 
+  keys.addOutputComponent("ca_","COMPONENTS","the calculated squared differences for Ca carbon chemical shifts"); 
+  keys.addOutputComponent("cb_","COMPONENTS","the calculated squared differences for Cb carbon chemical shifts"); 
+  keys.addOutputComponent("co_","COMPONENTS","the calculated squared differences for C' carbon chemical shifts"); 
   keys.remove("NOPBC");
 }
 
@@ -454,6 +454,21 @@ void CS2Backbone::calculate()
     } 
     // inside each replica
     comm.Sum(&sh[0][0], numResidues*6);
+    // now all the replicas have the same averaged chemical shifts
+    if(isvectorial) {
+      unsigned k=0;
+      for(unsigned i=0;i<cam_list[0].atom.size();i++) {
+        for(unsigned a=0;a<cam_list[0].atom[i].size();a++) {
+          for(unsigned cs=0;cs<6;cs++) {
+            // first set the camshift chemical shifts to the averaged one
+            cam_list[0].atom[i][a].calc_cs[cs] = sh[k][cs];
+            // then substitute it with the difference to exp 
+            sh[k][cs] = (sh[k][cs]-cam_list[0].atom[i][a].exp_cs[cs]);
+          }
+          k++;
+        }
+      }
+    }
   }
 
   double ff=fact*for_pl2alm;
@@ -477,7 +492,7 @@ void CS2Backbone::calculate()
     setBoxDerivatives  (virial);
   } else {
     csforces.clear();
-    energy = cam_list[0].ens_energy_force(coor, csforces, sh, N);
+    cam_list[0].calc_cs_forces_percs(coor,csforces,N);
     if(!serial) comm.Sum(&csforces[0][0], 6*numResidues*N*4);
 
     for(unsigned j=0;j<numResidues;j++) {
@@ -485,14 +500,15 @@ void CS2Backbone::calculate()
       for(unsigned cs=0;cs<6;cs++) {
         Value* comp=getPntrToComponent(6*j+cs);
         virial.zero();
-        comp->set(sh[j][cs]);
+        comp->set(sh[j][cs]*sh[j][cs]);
         unsigned place = placeres+cs*4*N;
         for(unsigned i=0;i<N;i++) {
           if(sh[j][cs]!=0.) {
             unsigned ipos = 4*i;
-            For[0] = ff*csforces.coor[place+ipos];
-            For[1] = ff*csforces.coor[place+ipos+1];
-            For[2] = ff*csforces.coor[place+ipos+2];
+            double tmp=2.*sh[j][cs]*ff;
+            For[0] = tmp*csforces.coor[place+ipos];
+            For[1] = tmp*csforces.coor[place+ipos+1];
+            For[2] = tmp*csforces.coor[place+ipos+2];
             setAtomsDerivatives(comp,i,For);
             virial=virial+(-1.*Tensor(getPosition(i),For));
           } else {
