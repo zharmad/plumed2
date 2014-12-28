@@ -190,7 +190,7 @@ type(QF)
   coupl.resize( atoms.size()/2 ); 
   unsigned ntarget=0;
 
-  if(type!=COMP) {
+  //if(type!=COMP) {
     // Read in RDC values
     for(unsigned i=0;i<coupl.size();++i){
        if( !parseNumbered( "COUPLING", i+1, coupl[i] ) ) break;
@@ -209,7 +209,7 @@ type(QF)
         parse("GYROM",mu_s[0]);
         for(unsigned i=1;i<coupl.size();++i) mu_s[i]=mu_s[0];
     } else if( ntarget!=coupl.size() ) error("found wrong number of GYROM values");
-  }
+  //}
 
   // Read in SCALING factors 
   scale.resize( coupl.size() );

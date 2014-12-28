@@ -31,6 +31,7 @@
 #include <almost/forcefield/const/camshift2.h>
 #include <almost/io/formostream.h>
 
+
 using namespace std;
 using namespace Almost;
 
@@ -215,7 +216,11 @@ isvectorial(false)
   if(ensemble) {
     std::vector<std::string> srep; 
     parseVector("REPLICAS", srep );
-    if(srep.size()==0) { std::string s = "0-"+std::to_string(ens_dim-1); srep.push_back(s); }
+    if(srep.size()==0) { 
+      std::string ss; Tools::convert(ens_dim-1,ss);
+      std::string s = "0-"+ss;
+      srep.push_back(s);
+    }
     Tools::interpretRanges(srep);
     for(unsigned i=0;i<srep.size();++i){
       bool ok=false;
