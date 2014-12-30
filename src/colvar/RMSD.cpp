@@ -26,6 +26,7 @@
 #include "reference/RMSDBase.h"
 #include "reference/MetricRegister.h"
 #include "core/Atoms.h"
+#include "tools/RMSD.h"
 
 
 using namespace std;
@@ -35,9 +36,11 @@ namespace colvar{
    
 class RMSD : public Colvar {
 	
-  PLMD::RMSDBase* rmsd;
+  PLMD::RMSD* rmsd;
   bool squared; 
+  bool has_additional_components;
   bool refder; 
+  std::vector<Vector> derivs ;
 
 public:
   RMSD(const ActionOptions&);
@@ -148,11 +151,11 @@ void RMSD::registerKeywords(Keywords& keys){
   keys.add("compulsory","REFERENCE","a file in pdb format containing the reference structure and the atoms involved in the CV.");
   keys.add("compulsory","TYPE","SIMPLE","the manner in which RMSD alignment is performed.  Should be OPTIMAL or SIMPLE.");
   keys.addFlag("SQUARED",false," This should be setted if you want MSD instead of RMSD ");
-  keys.addFlag("REFDER",false," This add the derivatives of the reference system as components");
+  keys.addFlag("REFERENCE_DERIVATIVES",false," This add the derivatives of the reference system as components");
 }
 
 RMSD::RMSD(const ActionOptions&ao):
-PLUMED_COLVAR_INIT(ao),rmsd(log),squared(false),refder(false)
+PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(false)
 {
   string reference;
   parse("REFERENCE",reference);
@@ -160,12 +163,12 @@ PLUMED_COLVAR_INIT(ao),rmsd(log),squared(false),refder(false)
   type.assign("SIMPLE");
   parse("TYPE",type);
   parseFlag("SQUARED",squared);
-  parseFlag("REFDER",refder);
+  parseFlag("REFERENCE_DERIVATIVES",refder);
 
   checkRead();
+  if (refder)has_additional_components=true;
 
-
-  if(!refder){ addValueWithDerivatives(); setNotPeriodic(); }else{
+  if(!has_additional_components){ addValueWithDerivatives(); setNotPeriodic(); }else{
 	addComponentWithDerivatives(string("rmsd")); componentIsNotPeriodic(string("rmsd"));
   }
   PDB pdb;
@@ -174,12 +177,16 @@ PLUMED_COLVAR_INIT(ao),rmsd(log),squared(false),refder(false)
   if( !pdb.read(reference,plumed.getAtoms().usingNaturalUnits(),0.1/atoms.getUnits().getLength()) )
       error("missing input file " + reference );
 
-  rmsd = metricRegister().create<RMSDBase>(type,pdb);
+  rmsd=new PLMD::RMSD();
+
+  //assign defaults remove_com=true + normalize_weights=true TODO: check what happens for the case SIMPLE 
+  rmsd->set(pdb,type);
   
-  std::vector<AtomNumber> atoms;
-  rmsd->getAtomRequests( atoms );
-  rmsd->setNumberOfAtoms( atoms.size() );
-  requestAtoms( atoms );
+  // request the atoms to the system
+  requestAtoms(pdb.getAtomNumbers());
+
+  // resize the derivs so not to care at later stages
+  derivs.resize(getNumberOfAtoms());
 
   log.printf("  reference from file %s\n",reference.c_str());
   log.printf("  which contains %d atoms\n",getNumberOfAtoms());
@@ -200,7 +207,6 @@ PLUMED_COLVAR_INIT(ao),rmsd(log),squared(false),refder(false)
 		oo.str("");
 		oo<<"refder_"<<at[i].serial()<<"_z";
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
-	
 	}
   }
 }
@@ -212,10 +218,21 @@ RMSD::~RMSD(){
 
 // calculator
 void RMSD::calculate(){
-  double r=rmsd->calculate( getPositions(), squared );
 
-  setValue(r); 
-  for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives( i, rmsd->getAtomDerivative(i) );
+  if(has_additional_components){
+          double r=rmsd->calculate( getPositions(), derivs, squared );
+      	  Value* vp=getPntrToComponent("rmsd");	  
+	  vp->set(r);
+	  for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives(vp, i, derivs[i] );
+	  // ask for additional derivatives
+//	  if(refder){
+//		
+//	  }
+  }else{
+  	  double r=rmsd->calculate( getPositions(), derivs, squared );
+	  setValue(r); 
+	  for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives( i, derivs[i] );
+  }
 
   Tensor virial; plumed_dbg_assert( !rmsd->getVirial(virial) );
   setBoxDerivativesNoPbc();
