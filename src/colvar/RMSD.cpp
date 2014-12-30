@@ -38,9 +38,13 @@ class RMSD : public Colvar {
 	
   PLMD::RMSD* rmsd;
   bool squared; 
-  bool has_additional_components;
+  bool has_additional_components; // switch to map to multiple components or single one
   bool refder; 
+  int type_calc;
   std::vector<Vector> derivs ;
+  enum TYPE_CALC {STD, ADD_REF_DERS}; 
+  std::vector<Vector> ddistdref ;
+  std::vector<string> ddistdref_names ;
 
 public:
   RMSD(const ActionOptions&);
@@ -155,7 +159,7 @@ void RMSD::registerKeywords(Keywords& keys){
 }
 
 RMSD::RMSD(const ActionOptions&ao):
-PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(false)
+PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(false),type_calc(STD)
 {
   string reference;
   parse("REFERENCE",reference);
@@ -166,7 +170,11 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
   parseFlag("REFERENCE_DERIVATIVES",refder);
 
   checkRead();
+
+  // include here all the cases that switch on multiple components
   if (refder)has_additional_components=true;
+  // add here the specific kind of rmsd calculation you need to employ
+  if (refder)type_calc=ADD_REF_DERS;
 
   if(!has_additional_components){ addValueWithDerivatives(); setNotPeriodic(); }else{
 	addComponentWithDerivatives(string("rmsd")); componentIsNotPeriodic(string("rmsd"));
@@ -181,12 +189,12 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
 
   //assign defaults remove_com=true + normalize_weights=true TODO: check what happens for the case SIMPLE 
   rmsd->set(pdb,type);
-  
   // request the atoms to the system
   requestAtoms(pdb.getAtomNumbers());
 
   // resize the derivs so not to care at later stages
   derivs.resize(getNumberOfAtoms());
+  if (refder)ddistdref.resize(getNumberOfAtoms()); 
 
   log.printf("  reference from file %s\n",reference.c_str());
   log.printf("  which contains %d atoms\n",getNumberOfAtoms());
@@ -199,13 +207,13 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
  	std::vector<AtomNumber> at=pdb.getAtomNumbers();		
 	for(unsigned i=0;i<at.size();i++){
 		ostringstream oo;
-		oo<<"refder_"<<at[i].serial()<<"_x";
+		oo<<"refder_"<<at[i].serial()<<"_x";ddistdref_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
 		oo.str("");
-		oo<<"refder_"<<at[i].serial()<<"_y";
+		oo<<"refder_"<<at[i].serial()<<"_y";ddistdref_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
 		oo.str("");
-		oo<<"refder_"<<at[i].serial()<<"_z";
+		oo<<"refder_"<<at[i].serial()<<"_z";ddistdref_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
 	}
   }
@@ -220,22 +228,32 @@ RMSD::~RMSD(){
 void RMSD::calculate(){
 
   if(has_additional_components){
-          double r=rmsd->calculate( getPositions(), derivs, squared );
-      	  Value* vp=getPntrToComponent("rmsd");	  
-	  vp->set(r);
-	  for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives(vp, i, derivs[i] );
-	  // ask for additional derivatives
-//	  if(refder){
-//		
-//	  }
+	double r; 
+	switch (type_calc) { 
+	  case STD: // this should never happen indeed
+		r=rmsd->calculate( getPositions(), derivs, squared );
+	  case ADD_REF_DERS: 
+		r=rmsd->calc_DDistDRef(getPositions(),derivs,ddistdref,squared);
+		for(unsigned i=0;i<ddistdref.size();i++){
+			getPntrToComponent(ddistdref_names[i*3  ])->set(ddistdref[i][0]);
+			getPntrToComponent(ddistdref_names[i*3+1])->set(ddistdref[i][1]);
+			getPntrToComponent(ddistdref_names[i*3+2])->set(ddistdref[i][2]);
+		}			
+	}	
+	// the common part
+      	Value* vp=getPntrToComponent("rmsd");	  
+	vp->set(r);
+	for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives(vp, i, derivs[i] );
   }else{
-  	  double r=rmsd->calculate( getPositions(), derivs, squared );
-	  setValue(r); 
-	  for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives( i, derivs[i] );
+	// in case of single value this is always standard calculation
+  	double r=rmsd->calculate( getPositions(), derivs, squared );
+	setValue(r); 
+	for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives( i, derivs[i] );
   }
 
   Tensor virial; plumed_dbg_assert( !rmsd->getVirial(virial) );
   setBoxDerivativesNoPbc();
+
 }
 
 }
