@@ -22,7 +22,7 @@
 #include "Bias.h"
 #include "ActionRegister.h"
 
-#include <cmath>
+#include <math.h>
 
 using namespace std;
 
@@ -144,10 +144,12 @@ temp_(2.494), MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0), MCfirst_(-
   log.printf("  maximum MC move of the uncertainty parameter %f\n",Dsigma_);
   log.printf("  uncertainty in the mean estimate %f\n",sigma_mean_);
   log.printf("  temperature of the system %f\n",temp_);
+  log.printf("  number of data points %d\n",getNumberOfArguments());
   log.printf("  number of replicas %d\n",nrep_);
   log.printf("  number of MC steps %d\n",MCsteps_);
   log.printf("  do MC every %d steps\n", MCstride_);
   log.printf("  MC seed %d\n", MCseed_);    
+
 
   addComponent("bias");   componentIsNotPeriodic("bias");
   addComponent("sigma");  componentIsNotPeriodic("sigma");
@@ -173,7 +175,7 @@ double BayesianSP::getEnergy(double sigma){
   double ene = 0.0;
   for(unsigned i=0;i<getNumberOfArguments();++i){
     double v = getArgument(i) + 2.0 * s * s;
-    ene -= std::log( 1.0 / v * ( 1.0 - std::exp( - 0.5 * v / sigma_mean_ / sigma_mean_ ) ) );
+    ene -= std::log( 1.0 / v * ( 1.0 - exp( - 0.5 * v / sigma_mean_ / sigma_mean_ ) ) );
   }
   // add priors and normalizations
   ene += std::log(sigma) - static_cast<double>(getNumberOfArguments())*std::log( sqrt2_div_pi * s );
@@ -235,11 +237,12 @@ void BayesianSP::calculate(){
   for(unsigned i=0;i<getNumberOfArguments();++i){
     double v = getArgument(i) + 2.0 * s * s;
     // useful quantity
-    double e = std::exp( - 0.5 * v / sigma_mean_ / sigma_mean_ );
+    double e = exp( - 0.5 * v / sigma_mean_ / sigma_mean_ );
     // increment energy
     ene -= std::log( 1.0 / v * ( 1.0 - e ) );
-    // set derivatives
+    // calculate force
     double force = - 1.0 / v + 1.0 / ( 1.0 - e ) * e * 0.5 / sigma_mean_ / sigma_mean_;
+    // set force on the i-th component
     setOutputForce(i, temp_ * force);
   };
   // add priors and normalizations 
