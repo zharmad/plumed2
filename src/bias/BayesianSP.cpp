@@ -138,6 +138,12 @@ temp_(2.494), MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0), MCfirst_(-
   parse("MC_SEED",  MCseed_);
   checkRead();
 
+  // divide sigma_mean by the square root of the number of replicas
+  sigma_mean_ /= sqrt(static_cast<double>(nrep_));
+
+  // multiple MC stride by bias stride, for MTS
+  MCstride_ *= getStride();
+
   log.printf("  initial value of uncertainty %f\n",sigma_);
   log.printf("  minimum value of uncertainty %f\n",sigma_min_);
   log.printf("  maximum value of uncertainty %f\n",sigma_max_);
@@ -150,7 +156,6 @@ temp_(2.494), MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0), MCfirst_(-
   log.printf("  do MC every %d steps\n", MCstride_);
   log.printf("  MC seed %d\n", MCseed_);    
 
-
   addComponent("bias");   componentIsNotPeriodic("bias");
   addComponent("sigma");  componentIsNotPeriodic("sigma");
   addComponent("accept"); componentIsNotPeriodic("accept");
@@ -162,9 +167,6 @@ temp_(2.494), MCsteps_(1), MCstride_(1), MCseed_(1234), MCaccept_(0), MCfirst_(-
 
   // initialize random seed
   srand (MCseed_);
-
-  // divide sigma_mean by the square root of the number of replicas
-  sigma_mean_ /= sqrt(static_cast<double>(nrep_));
 
 }
 
