@@ -91,6 +91,7 @@ nomemory(true),
 write_chq(false),
 reusing_data(false),
 ignore_reweight(false),
+freq(1),
 needeng(false),
 idata(0),
 firstAnalysisDone(false),
@@ -291,6 +292,9 @@ void Analysis::calculate(){
      data[idata]->print( rfile, getTime(), logweights[idata], old_norm );
      rfile.flush();
   }
+  // intermediate analysis (is a virtual, so each derived class can choose how and what to dump) every stride
+  if(getStep()%getStride()==0)intermediateAnalysis(); 
+
   // Increment data counter
   idata++;
 }
