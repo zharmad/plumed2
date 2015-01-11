@@ -40,11 +40,14 @@ class RMSD : public Colvar {
   bool squared; 
   bool has_additional_components; // switch to map to multiple components or single one
   bool refder; 
+  bool somader; 
   int type_calc;
   std::vector<Vector> derivs ;
-  enum TYPE_CALC {STD, ADD_REF_DERS}; 
+  enum TYPE_CALC {STD, ADD_REF_DERS, ADD_SOMA_DERS}; 
   std::vector<Vector> ddistdref ;
   std::vector<string> ddistdref_names ;
+  std::vector<Vector> ddistdref_soma ;
+  std::vector<string> ddistdref_soma_names ;
 
 public:
   RMSD(const ActionOptions&);
@@ -156,10 +159,11 @@ void RMSD::registerKeywords(Keywords& keys){
   keys.add("compulsory","TYPE","SIMPLE","the manner in which RMSD alignment is performed.  Should be OPTIMAL or SIMPLE.");
   keys.addFlag("SQUARED",false," This should be setted if you want MSD instead of RMSD ");
   keys.addFlag("REFERENCE_DERIVATIVES",false," This add the derivatives of the reference system as components");
+  keys.addFlag("SOMA_DERIVATIVES",false," This calculates derivatives needed by SOMA ");
 }
 
 RMSD::RMSD(const ActionOptions&ao):
-PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(false),type_calc(STD)
+PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(false),somader(false),type_calc(STD)
 {
   string reference;
   parse("REFERENCE",reference);
@@ -168,6 +172,8 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
   parse("TYPE",type);
   parseFlag("SQUARED",squared);
   parseFlag("REFERENCE_DERIVATIVES",refder);
+  parseFlag("SOMA_DERIVATIVES",somader);
+
 
   checkRead();
 
@@ -175,6 +181,9 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
   if (refder)has_additional_components=true;
   // add here the specific kind of rmsd calculation you need to employ
   if (refder)type_calc=ADD_REF_DERS;
+
+  if (somader)has_additional_components=true;
+  if (somader)type_calc=ADD_SOMA_DERS;
 
   if(!has_additional_components){ addValueWithDerivatives(); setNotPeriodic(); }else{
 	addComponentWithDerivatives(string("rmsd")); componentIsNotPeriodic(string("rmsd"));
@@ -195,13 +204,14 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
   // resize the derivs so not to care at later stages
   derivs.resize(getNumberOfAtoms());
   if (refder)ddistdref.resize(getNumberOfAtoms()); 
+  if (somader)ddistdref_soma.resize(getNumberOfAtoms()); 
 
   log.printf("  reference from file %s\n",reference.c_str());
   log.printf("  which contains %d atoms\n",getNumberOfAtoms());
   log.printf("  method for alignment : %s \n",type.c_str() );
   if(squared)log.printf("  chosen to use SQUARED option for MSD instead of RMSD\n");
   if(refder){
-  	log.printf("  chosen to use REFDER to add derivatives of reference frame as values\n");
+  	log.printf("  chosen to use REFERENCE_DERIVATIVES to dump derivatives of reference frame as values\n");
 	// loop over all the atoms, create a label, add as derivative 
 	//
  	std::vector<AtomNumber> at=pdb.getAtomNumbers();		
@@ -217,6 +227,24 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
 	}
   }
+  if(somader){
+  	log.printf("  chosen to use SOMA_DERIVATIVES  to dump  derivatives needed for SOMA evolution\n");
+	// loop over all the atoms, create a label, add as derivative 
+	//
+ 	std::vector<AtomNumber> at=pdb.getAtomNumbers();		
+	for(unsigned i=0;i<at.size();i++){
+		ostringstream oo;
+		oo<<"somader_"<<at[i].serial()<<"_x";ddistdref_soma_names.push_back(oo.str());
+	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		oo.str("");
+		oo<<"somader_"<<at[i].serial()<<"_y";ddistdref_soma_names.push_back(oo.str());
+	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		oo.str("");
+		oo<<"somader_"<<at[i].serial()<<"_z";ddistdref_soma_names.push_back(oo.str());
+	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+	}
+  }
+
 }
 
 RMSD::~RMSD(){
@@ -238,6 +266,13 @@ void RMSD::calculate(){
 			getPntrToComponent(ddistdref_names[i*3  ])->set(ddistdref[i][0]);
 			getPntrToComponent(ddistdref_names[i*3+1])->set(ddistdref[i][1]);
 			getPntrToComponent(ddistdref_names[i*3+2])->set(ddistdref[i][2]);
+		}			
+	  case ADD_SOMA_DERS:
+		r=rmsd->calc_SOMA(getPositions(),derivs,ddistdref_soma,squared);
+		for(unsigned i=0;i<ddistdref_soma.size();i++){
+			getPntrToComponent(ddistdref_soma_names[i*3  ])->set(ddistdref_soma[i][0]);
+			getPntrToComponent(ddistdref_soma_names[i*3+1])->set(ddistdref_soma[i][1]);
+			getPntrToComponent(ddistdref_soma_names[i*3+2])->set(ddistdref_soma[i][2]);
 		}			
 	}	
 	// the common part
