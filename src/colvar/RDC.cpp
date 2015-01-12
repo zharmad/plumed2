@@ -353,8 +353,8 @@ void RDC::qf_calc(bool qf, bool docomp)
   double fact=1.0;
   if(ensemble) {
     fact = 1./((double) ens_dim);
-    // share the calculated rdc
-    if(!serial) comm.Sum(&rdc[0],rdc.size());
+    // share the calculated rdc, but if this is a printout step then they have been already shared above
+    if(!serial&&!printout) comm.Sum(&rdc[0],rdc.size());
     // I am the master of my replica
     if(comm.Get_rank()==0) {
       // among replicas
@@ -373,16 +373,15 @@ void RDC::qf_calc(bool qf, bool docomp)
     } 
   }
  
-  Tensor virial;
-  virial.zero();
-  vector<Vector> deriv(N);
-  if(!serial) comm.Sum(score);
-
   double tmpder = 2.*fact;
   if(qf) {
     score  /= norm;
     tmpder /= norm;
   } 
+
+  Tensor virial;
+  virial.zero();
+  vector<Vector> deriv(N);
 
   if(!docomp) {
     for(unsigned r=rank;r<N;r+=stride) {
@@ -395,6 +394,7 @@ void RDC::qf_calc(bool qf, bool docomp)
     if(!serial){
       if(!deriv.empty()) comm.Sum(&deriv[0][0],3*deriv.size());
       comm.Sum(virial);
+      comm.Sum(score);
     }
 
     for(unsigned i=0;i<N;i++) setAtomsDerivatives(i,deriv[i]);
@@ -504,7 +504,7 @@ void RDC::corr_calc()
   if(ensemble) {
     fact = 1./((double) ens_dim);
     // share the calculated rdc
-    if(!serial) comm.Sum(&rdc[0],rdc.size());
+    if(!serial&&!printout) comm.Sum(&rdc[0],rdc.size());
     // I am the master of my replica
     if(comm.Get_rank()==0) {
       // among replicas
