@@ -190,26 +190,24 @@ type(QF)
   coupl.resize( atoms.size()/2 ); 
   unsigned ntarget=0;
 
-  //if(type!=COMP) {
-    // Read in RDC values
-    for(unsigned i=0;i<coupl.size();++i){
-       if( !parseNumbered( "COUPLING", i+1, coupl[i] ) ) break;
-       ntarget++; 
-    }
-    if( ntarget!=coupl.size() ) error("found wrong number of COUPLING values");
+  // Read in RDC values
+  for(unsigned i=0;i<coupl.size();++i){
+     if( !parseNumbered( "COUPLING", i+1, coupl[i] ) ) break;
+     ntarget++; 
+  }
+  if( ntarget!=coupl.size() ) error("found wrong number of COUPLING values");
 
-    // Read in GYROMAGNETIC constants 
-    mu_s.resize( coupl.size() ); 
-    ntarget=0;
-    for(unsigned i=0;i<coupl.size();++i){
-       if( !parseNumbered( "GYROM", i+1, mu_s[i] ) ) break;
-       ntarget++; 
-    }
-    if( ntarget==0 ){
-        parse("GYROM",mu_s[0]);
-        for(unsigned i=1;i<coupl.size();++i) mu_s[i]=mu_s[0];
-    } else if( ntarget!=coupl.size() ) error("found wrong number of GYROM values");
-  //}
+  // Read in GYROMAGNETIC constants 
+  mu_s.resize( coupl.size() ); 
+  ntarget=0;
+  for(unsigned i=0;i<coupl.size();++i){
+     if( !parseNumbered( "GYROM", i+1, mu_s[i] ) ) break;
+     ntarget++; 
+  }
+  if( ntarget==0 ){
+      parse("GYROM",mu_s[0]);
+      for(unsigned i=1;i<coupl.size();++i) mu_s[i]=mu_s[0];
+  } else if( ntarget!=coupl.size() ) error("found wrong number of GYROM values");
 
   // Read in SCALING factors 
   scale.resize( coupl.size() );
@@ -405,12 +403,22 @@ void RDC::qf_calc(bool qf, bool docomp)
 
   } else {
 
+    for(unsigned r=rank;r<N;r+=stride) {
+      deriv[r]   = tmpder*dRDC[r];
+      deriv[r+1] = tmpder*dRDC[r+1];
+    }
+
+    if(!serial){
+      if(!deriv.empty()) comm.Sum(&deriv[0][0],3*deriv.size());
+      comm.Sum(&rdc[0],rdc.size());
+    }
+
     unsigned index=0;
     for(unsigned r=0;r<N;r+=2) {
       Value* val=getPntrToComponent(index);
-      virial= -Tensor(getPosition(r),tmpder*dRDC[r  ])-Tensor(getPosition(r+1),tmpder*dRDC[r+1]);
-      setAtomsDerivatives( val, r  , tmpder*dRDC[r  ]);
-      setAtomsDerivatives( val, r+1, tmpder*dRDC[r+1]); 
+      virial= -Tensor(getPosition(r),deriv[r  ])-Tensor(getPosition(r+1),deriv[r+1]);
+      setAtomsDerivatives( val, r  , deriv[r  ]);
+      setAtomsDerivatives( val, r+1, deriv[r+1]); 
       setBoxDerivatives( val, virial );
       double delta = (rdc[index]-coupl[index])*(rdc[index]-coupl[index]);
       val->set(delta);
