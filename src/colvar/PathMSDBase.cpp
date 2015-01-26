@@ -217,7 +217,7 @@ void PathMSDBase::calculate(){
        if(j==0){for(unsigned i=0;i< derivs_z.size();i++){ derivs_z[i]+=(*it).distder[i]*expval/partition;}} 
        if(do_reference_ders){
 		for(unsigned i=0;i< derivs_ref_s[j][(*it).index].size();i++)derivs_ref_s[j][(*it).index][i]=tmp*(*it).refdistder[i]; 
-       		if(j==0)for(unsigned i=0;i< derivs_ref_z.size();i++){ derivs_ref_z[(*it).index][i]=(*it).refdistder[i]*expval/partition;} 
+       		if(j==0)for(unsigned i=0;i< derivs_z.size();i++){ derivs_ref_z[(*it).index][i]=(*it).refdistder[i]*expval/partition;} 
        }	
     }
     for(unsigned i=0;i< derivs_s.size();i++){
@@ -294,7 +294,7 @@ void PathMSDBase::doFinDiffReferenceDerivatives(){
 					PathMSDBase::calculate();	
 					for(unsigned ii=0;ii<s_size;ii++)val_s_path[ii]=ptr_val_s_path[ii]->get();
 					// dump findiff
-					Action::log.printf("DERS I_S %d I_F %d AT %d COMP %d  ANAL %f NUM %f \n",i_s,i_f,i_a,i,(val_s_path[i_s]-old_val_s_path[i_s])/eps,derivs_ref_s[i_s][i_f][i_a][i]);	
+					Action::log.printf("DERS I_S %d I_F %d AT %d COMP %d NUM %f ANAL %f \n",i_s,i_f,i_a,i,(val_s_path[i_s]-old_val_s_path[i_s])/eps,derivs_ref_s[i_s][i_f][i_a][i]);	
 					// replace new value with the old one and 	
 					old_ref[i_a][i]=oldcoor;
 					msdv[i_f].clear();
@@ -321,7 +321,7 @@ void PathMSDBase::doFinDiffReferenceDerivatives(){
 				PathMSDBase::calculate();	
 				val_z_path=ptr_val_z_path->get();
 				// dump findiff
-				Action::log.printf("DERZ I_F %d AT %d COMP %d  ANAL %f NUM %f \n",i_f,i_a,i,(val_z_path-old_val_z_path)/eps,derivs_ref_z[i_f][i_a][i]);	
+				Action::log.printf("DERZ I_F %d AT %d COMP %d  NUM %f ANAL %f \n",i_f,i_a,i,(val_z_path-old_val_z_path)/eps,derivs_ref_z[i_f][i_a][i]);	
 				// replace new value with the old one and 	
 				old_ref[i_a][i]=oldcoor;
 				msdv[i_f].clear();
