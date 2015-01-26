@@ -21,6 +21,7 @@
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 #include "PathMSDBase.h"
 #include "core/PlumedMain.h"
+#include <iostream>
 
 using namespace std;
 
@@ -65,9 +66,33 @@ class PathMSD : public PathMSDBase {
 public:
   PathMSD(const ActionOptions&);
   static void registerKeywords(Keywords& keys);
+  vector<std::string> dsdref_names; 
+  vector<std::string> dzdref_names; 
+   virtual void calculate();
 };
 
 PLUMED_REGISTER_ACTION(PathMSD,"PATHMSD")
+
+void PathMSD::calculate(){
+	PathMSDBase::calculate();
+	//here put the assigment of additional components which are requested
+	unsigned nat=getNumberOfAtoms();
+	if(do_reference_ders){
+        	for(unsigned i=0;i<nframes;i++){
+        	        for(unsigned j=0;j<nat;j++){
+				unsigned offset=3*nat*i+j*3;
+				getPntrToComponent(dsdref_names[offset  ])->set(derivs_ref_s[0][i][j][0]);
+				getPntrToComponent(dsdref_names[offset+1])->set(derivs_ref_s[0][i][j][1]);
+				getPntrToComponent(dsdref_names[offset+2])->set(derivs_ref_s[0][i][j][2]);
+				getPntrToComponent(dzdref_names[offset  ])->set(derivs_ref_z[i][j][0]);
+				getPntrToComponent(dzdref_names[offset+1])->set(derivs_ref_z[i][j][1]);
+				getPntrToComponent(dzdref_names[offset+2])->set(derivs_ref_z[i][j][2]);
+			}
+		}
+	}	
+	// finite difference
+	doFinDiffReferenceDerivatives();
+}
 
 void PathMSD::registerKeywords(Keywords& keys){
   PathMSDBase::registerKeywords(keys);
@@ -94,6 +119,28 @@ Action(ao),PathMSDBase(ao)
                 vector<double> v; v.push_back(i);
 		indexvec.push_back(v);i+=1.; 
   }
+  // if the base class has parsed already REFERENCE_DERIVATIVES then you can add the printout ways here, otherwise
+  if(do_reference_ders){
+	for(unsigned i=0;i<nframes;i++){
+		for(unsigned j=0;j<getNumberOfAtoms();j++){
+			ostringstream oo;
+        	       	oo<<"sss_refder_fr_"<<i<<"_at_"<<getAbsoluteIndexes()[j].serial()<<"_x";dsdref_names.push_back(oo.str());
+                	addComponent(oo.str());componentIsNotPeriodic(oo.str());oo.str("");
+		       	oo<<"sss_refder_fr_"<<i<<"_at_"<<getAbsoluteIndexes()[j].serial()<<"_y";dsdref_names.push_back(oo.str());
+                	addComponent(oo.str());componentIsNotPeriodic(oo.str());oo.str("");
+		       	oo<<"sss_refder_fr_"<<i<<"_at_"<<getAbsoluteIndexes()[j].serial()<<"_z";dsdref_names.push_back(oo.str());
+                	addComponent(oo.str());componentIsNotPeriodic(oo.str());oo.str("");
+		  	oo<<"zzz_refder_fr_"<<i<<"_at_"<<getAbsoluteIndexes()[j].serial()<<"_x";dzdref_names.push_back(oo.str());
+                	addComponent(oo.str());componentIsNotPeriodic(oo.str());oo.str("");
+		  	oo<<"zzz_refder_fr_"<<i<<"_at_"<<getAbsoluteIndexes()[j].serial()<<"_y";dzdref_names.push_back(oo.str());
+                	addComponent(oo.str());componentIsNotPeriodic(oo.str());oo.str("");
+		  	oo<<"zzz_refder_fr_"<<i<<"_at_"<<getAbsoluteIndexes()[j].serial()<<"_z";dzdref_names.push_back(oo.str());
+                	addComponent(oo.str());componentIsNotPeriodic(oo.str());oo.str("");
+		}
+	}		
+  } 
+
+
 }
 
 }

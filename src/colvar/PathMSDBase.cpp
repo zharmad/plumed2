@@ -40,18 +40,21 @@ void PathMSDBase::registerKeywords(Keywords& keys){
   keys.add("compulsory","REFERENCE","the pdb is needed to provide the various milestones");
   keys.add("optional","NEIGH_SIZE","size of the neighbor list");
   keys.add("optional","NEIGH_STRIDE","how often the neighbor list needs to be calculated in time units");
+  keys.addFlag("REFERENCE_DERIVATIVES",false,"need the derivatives respect to the reference frame too");
 }
 
 PathMSDBase::PathMSDBase(const ActionOptions&ao):
 PLUMED_COLVAR_INIT(ao),
 neigh_size(-1),
 neigh_stride(-1),
+do_reference_ders(false),
 nframes(0)
 {
   parse("LAMBDA",lambda);
   parse("NEIGH_SIZE",neigh_size);
   parse("NEIGH_STRIDE",neigh_stride);
   parse("REFERENCE",reference);
+  parseFlag("REFERENCE_DERIVATIVES",do_reference_ders);
 
   // open the file
   FILE* fp=fopen(reference.c_str(),"r");
@@ -102,6 +105,7 @@ nframes(0)
 
 void PathMSDBase::calculate(){
 
+
   if(neigh_size>0 && getExchangeStep()) error("Neighbor lists for this collective variable are not compatible with replica exchange, sorry for that!");
 
   //log.printf("NOW CALCULATE! \n");
@@ -126,23 +130,33 @@ void PathMSDBase::calculate(){
 
   std::vector<double> tmp_distances(imgVec.size(),0.0);
   std::vector<Vector> tmp_derivs;
+  std::vector<Vector> tmp_ref_derivs;
 // this array is a merge of all tmp_derivs, so as to allow a single comm.Sum below
   std::vector<Vector> tmp_derivs2(imgVec.size()*nat);
+  std::vector<Vector> tmp_ref_derivs2;
+  if(do_reference_ders)tmp_ref_derivs2.resize(imgVec.size()*nat);
 
 // if imgVec.size() is less than nframes, it means that only some msd will be calculated
   for(unsigned i=rank;i<imgVec.size();i+=stride){
-// store temporary local results
-    tmp_distances[i]=msdv[imgVec[i].index].calculate(getPositions(),tmp_derivs,true);
-    plumed_assert(tmp_derivs.size()==nat);
-    for(unsigned j=0;j<nat;j++) tmp_derivs2[i*nat+j]=tmp_derivs[j];
+//	 store temporary local results
+  	if(do_reference_ders){
+  	  tmp_distances[i]=msdv[imgVec[i].index].calc_DDistDRef(getPositions(),tmp_derivs,tmp_ref_derivs,true);
+  	  for(unsigned j=0;j<nat;j++) tmp_ref_derivs2[i*nat+j]=tmp_ref_derivs[j];
+	}else{
+  	  tmp_distances[i]=msdv[imgVec[i].index].calculate(getPositions(),tmp_derivs,true);
+	}
+  	plumed_assert(tmp_derivs.size()==nat);
+  	for(unsigned j=0;j<nat;j++) tmp_derivs2[i*nat+j]=tmp_derivs[j];
   }
 // reduce over all processors
   comm.Sum(tmp_distances);
   comm.Sum(tmp_derivs2);
+  if(do_reference_ders)  comm.Sum(tmp_ref_derivs2);
 // assign imgVec[i].distance and imgVec[i].distder
   for(unsigned i=0;i<imgVec.size();i++){
     imgVec[i].distance=tmp_distances[i];
     imgVec[i].distder.assign(&tmp_derivs2[i*nat],nat+&tmp_derivs2[i*nat]);
+    if(do_reference_ders)imgVec[i].refdistder.assign(&tmp_ref_derivs2[i*nat],nat+&tmp_ref_derivs2[i*nat]);
   }
 
 // END OF THE HEAVY PART
@@ -159,8 +173,26 @@ void PathMSDBase::calculate(){
   double partition=0.;
   double tmp;
 
+
   // clean vector
   for(unsigned i=0;i< derivs_z.size();i++){derivs_z[i].zero();}
+
+  // if reference ders are needed resize if there is need (typically at the first call) and then just clear the vector 
+  if(do_reference_ders){
+	  if(derivs_ref_s.size()==0){
+		// allocate storage
+		derivs_ref_s.resize(s_path.size());	
+		for (unsigned i =0 ;i<s_path.size() ; i++ ){
+			derivs_ref_s[i].resize(nframes);
+			for (unsigned j =0 ;j<nframes ; j++ )derivs_ref_s[i][j].resize(derivs_s.size());
+		}
+		derivs_ref_z.resize(nframes);	
+		for (unsigned i =0 ;i<nframes ; i++ )derivs_ref_z[i].resize(derivs_s.size()); 
+	  }
+	  //clear 
+	  for (unsigned i =0 ;i<derivs_ref_s.size() ; i++ )for (unsigned j =0 ;j<derivs_ref_s[i].size() ; j++ )for (unsigned k =0 ;k<derivs_ref_s[i][j].size() ; k++ ) derivs_ref_s[i][j][k].zero();  
+	  for (unsigned i =0 ;i<derivs_ref_z.size() ; i++ )for (unsigned j =0 ;j<derivs_ref_z[i].size() ; j++ ) derivs_ref_z[i][j].zero();			
+  }
 
   typedef  vector< class ImagePath  >::iterator imgiter;
   for(imgiter it=imgVec.begin();it!=imgVec.end();++it){ 
@@ -173,6 +205,7 @@ void PathMSDBase::calculate(){
   }
   for(unsigned i=0;i<s_path.size();i++){ s_path[i]/=partition;  val_s_path[i]->set(s_path[i]) ;}
   val_z_path->set(-(1./lambda)*std::log(partition));
+
   for(unsigned j=0;j<s_path.size();j++){
     // clean up
     for(unsigned i=0;i< derivs_s.size();i++){derivs_s[i].zero();}
@@ -182,6 +215,10 @@ void PathMSDBase::calculate(){
        tmp=lambda*expval*(s_path[j]-(*it).property[j])/partition;
        for(unsigned i=0;i< derivs_s.size();i++){ derivs_s[i]+=tmp*(*it).distder[i] ;} 
        if(j==0){for(unsigned i=0;i< derivs_z.size();i++){ derivs_z[i]+=(*it).distder[i]*expval/partition;}} 
+       if(do_reference_ders){
+		for(unsigned i=0;i< derivs_ref_s[j][(*it).index].size();i++)derivs_ref_s[j][(*it).index][i]=tmp*(*it).refdistder[i]; 
+       		if(j==0)for(unsigned i=0;i< derivs_ref_z.size();i++){ derivs_ref_z[(*it).index][i]=(*it).refdistder[i]*expval/partition;} 
+       }	
     }
     for(unsigned i=0;i< derivs_s.size();i++){
           setAtomsDerivatives (val_s_path[j],i,derivs_s[i]); 
@@ -210,6 +247,93 @@ void PathMSDBase::calculate(){
         } 
   }
   //log.printf("CALCULATION DONE! \n");
+}
+
+void PathMSDBase::doFinDiffReferenceDerivatives(){
+	Action::log.printf("Starting reference frame derivatives\n");
+	unsigned nat;nat=pdbv[0].size();
+	// test on s
+	unsigned s_size;s_size=1;
+	if(labels.size()>0){s_size=labels.size();}	
+	// loop over s_values 
+	PathMSDBase::calculate();	
+	// get the values from the argument list
+  	vector<Value*> ptr_val_s_path;
+  	if(s_size>1){
+  	  for(unsigned i=0;i<labels.size();i++){ ptr_val_s_path.push_back(getPntrToComponent(labels[i].c_str()));}
+  	}else{
+  	   ptr_val_s_path.push_back(getPntrToComponent("sss"));
+  	}
+  	Value* ptr_val_z_path=getPntrToComponent("zzz"); 
+	double old_val_z_path=ptr_val_z_path->get();
+	// now retreve them all via pointer
+	vector<double> old_val_s_path(ptr_val_s_path.size());
+	vector<double> val_s_path(ptr_val_s_path.size());
+	for(unsigned i=0;i<s_size;i++)old_val_s_path[i]=ptr_val_s_path[i]->get();
+	double val_z_path;
+	// save the reference
+	std::vector<Vector> old_ref;
+	std::vector<double> align; align=pdbv[0].getOccupancy();
+	std::vector<double> displace; displace=pdbv[0].getBeta();
+        double eps=1.e-6;
+	for (unsigned int i_s=0;i_s<s_size;i_s++){
+		// loop over frames 
+		for (unsigned int i_f=0;i_f<nframes;i_f++){
+			// loop over atoms straight from the pdbs
+			old_ref=pdbv[i_f].getPositions();
+			for (unsigned int i_a=0;i_a<nat;i_a++){
+				// loop over directions
+				for(unsigned i=0;i<3;i++  ){
+					double oldcoor=old_ref[i_a][i];
+					// save old value for reference
+					old_ref[i_a][i]+=eps;
+					// alter reference and reinitialize the object
+					msdv[i_f].clear();
+       					msdv[i_f].set(align, displace, old_ref,"OPTIMAL" );
+					//recalculate s
+					PathMSDBase::calculate();	
+					for(unsigned ii=0;ii<s_size;ii++)val_s_path[ii]=ptr_val_s_path[ii]->get();
+					// dump findiff
+					Action::log.printf("DERS I_S %d I_F %d AT %d COMP %d  ANAL %f NUM %f \n",i_s,i_f,i_a,i,(val_s_path[i_s]-old_val_s_path[i_s])/eps,derivs_ref_s[i_s][i_f][i_a][i]);	
+					// replace new value with the old one and 	
+					old_ref[i_a][i]=oldcoor;
+					msdv[i_f].clear();
+       					msdv[i_f].set(align, displace, old_ref,"OPTIMAL" );
+				}
+			}
+		}
+	}
+	// test on z		
+	// loop over frames 
+	for (unsigned int i_f=0;i_f<nframes;i_f++){
+		// loop over atoms straight from the pdbs
+		old_ref=pdbv[i_f].getPositions();
+		for (unsigned int i_a=0;i_a<nat;i_a++){
+			// loop over directions
+			for(unsigned i=0;i<3;i++  ){
+				double oldcoor=old_ref[i_a][i];
+				// save old value for reference
+				old_ref[i_a][i]+=eps;
+				// alter reference and reinitialize the object
+				msdv[i_f].clear();
+       				msdv[i_f].set(align, displace, old_ref,"OPTIMAL" );
+				//recalculate s/z
+				PathMSDBase::calculate();	
+				val_z_path=ptr_val_z_path->get();
+				// dump findiff
+				Action::log.printf("DERZ I_F %d AT %d COMP %d  ANAL %f NUM %f \n",i_f,i_a,i,(val_z_path-old_val_z_path)/eps,derivs_ref_z[i_f][i_a][i]);	
+				// replace new value with the old one and 	
+				old_ref[i_a][i]=oldcoor;
+				msdv[i_f].clear();
+       				msdv[i_f].set(align, displace, old_ref,"OPTIMAL" );
+			}
+		}
+	}
+	// test on z		
+	
+	
+	Action::log.printf("Ending reference frame derivatives\n");
+	plumed_merror("Test done");		
 }
 
 }

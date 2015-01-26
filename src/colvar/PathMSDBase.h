@@ -48,6 +48,8 @@ class PathMSDBase : public Colvar {
         double similarity;
         // derivatives of the distance
         std::vector<Vector> distder;
+	// derivatives of the distance respect to the reference
+        std::vector<Vector>  refdistder;
         // here one can add a pointer to a value (hypothetically providing a distance from a point) 
   };
   struct imgOrderByDist {
@@ -70,10 +72,19 @@ class PathMSDBase : public Colvar {
   std::vector<Vector> derivs_z;
   std::vector <ImagePath> imgVec; // this can be used for doing neighlist   
 protected:
+  bool do_reference_ders;
   std::vector<PDB> pdbv;
   std::vector<std::string> labels;
   std::vector< std::vector<double> > indexvec; // use double to allow isomaps
   unsigned nframes;
+
+  // make it protected to have access from derived classes
+  std::vector< std::vector< std::vector<Vector> >  > derivs_ref_s; //  dimensionality is number_of_spaths * number of frames in each path * number of atoms
+  std::vector< std::vector<Vector> > derivs_ref_z; // dimensionality is number of frames in each path * number of atoms
+
+  // routine to test derivatives of reference	
+  void doFinDiffReferenceDerivatives(); 
+
 public:
   PathMSDBase(const ActionOptions&);
 // active methods:
