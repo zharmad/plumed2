@@ -91,7 +91,7 @@ void PathMSD::calculate(){
 		}
 	}	
 	// finite difference
-	doFinDiffReferenceDerivatives();
+	//doFinDiffReferenceDerivatives();
 }
 
 void PathMSD::registerKeywords(Keywords& keys){

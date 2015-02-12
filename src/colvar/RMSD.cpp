@@ -46,8 +46,10 @@ class RMSD : public Colvar {
   enum TYPE_CALC {STD, ADD_REF_DERS, ADD_SOMA_DERS}; 
   std::vector<Vector> ddistdref ;
   std::vector<string> ddistdref_names ;
+  std::vector<Value*> ddistdref_ptrs ;
   std::vector<Vector> ddistdref_soma ;
   std::vector<string> ddistdref_soma_names ;
+  std::vector<Value*> ddistdref_soma_ptrs ;
 
 public:
   RMSD(const ActionOptions&);
@@ -219,12 +221,15 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
 		ostringstream oo;
 		oo<<"refder_"<<at[i].serial()<<"_x";ddistdref_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		ddistdref_ptrs.push_back(getPntrToComponent(ddistdref_names.back()));
 		oo.str("");
 		oo<<"refder_"<<at[i].serial()<<"_y";ddistdref_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		ddistdref_ptrs.push_back(getPntrToComponent(ddistdref_names.back()));
 		oo.str("");
 		oo<<"refder_"<<at[i].serial()<<"_z";ddistdref_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		ddistdref_ptrs.push_back(getPntrToComponent(ddistdref_names.back()));
 	}
   }
   if(somader){
@@ -236,12 +241,15 @@ PLUMED_COLVAR_INIT(ao),squared(false),has_additional_components(false),refder(fa
 		ostringstream oo;
 		oo<<"somader_"<<at[i].serial()<<"_x";ddistdref_soma_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		ddistdref_soma_ptrs.push_back(getPntrToComponent(ddistdref_soma_names.back()));
 		oo.str("");
 		oo<<"somader_"<<at[i].serial()<<"_y";ddistdref_soma_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		ddistdref_soma_ptrs.push_back(getPntrToComponent(ddistdref_soma_names.back()));
 		oo.str("");
 		oo<<"somader_"<<at[i].serial()<<"_z";ddistdref_soma_names.push_back(oo.str());
 	        addComponent(oo.str());componentIsNotPeriodic(oo.str());
+		ddistdref_soma_ptrs.push_back(getPntrToComponent(ddistdref_soma_names.back()));
 	}
   }
 
@@ -263,16 +271,16 @@ void RMSD::calculate(){
 	  case ADD_REF_DERS: 
 		r=rmsd->calc_DDistDRef(getPositions(),derivs,ddistdref,squared);
 		for(unsigned i=0;i<ddistdref.size();i++){
-			getPntrToComponent(ddistdref_names[i*3  ])->set(ddistdref[i][0]);
-			getPntrToComponent(ddistdref_names[i*3+1])->set(ddistdref[i][1]);
-			getPntrToComponent(ddistdref_names[i*3+2])->set(ddistdref[i][2]);
+			ddistdref_ptrs[i*3  ]->set(ddistdref[i][0]);
+			ddistdref_ptrs[i*3+1]->set(ddistdref[i][1]);
+			ddistdref_ptrs[i*3+2]->set(ddistdref[i][2]);
 		}			
 	  case ADD_SOMA_DERS:
 		r=rmsd->calc_SOMA(getPositions(),derivs,ddistdref_soma,squared);
 		for(unsigned i=0;i<ddistdref_soma.size();i++){
-			getPntrToComponent(ddistdref_soma_names[i*3  ])->set(ddistdref_soma[i][0]);
-			getPntrToComponent(ddistdref_soma_names[i*3+1])->set(ddistdref_soma[i][1]);
-			getPntrToComponent(ddistdref_soma_names[i*3+2])->set(ddistdref_soma[i][2]);
+			ddistdref_soma_ptrs[i*3  ]->set(ddistdref_soma[i][0]);
+			ddistdref_soma_ptrs[i*3+1]->set(ddistdref_soma[i][1]);
+			ddistdref_soma_ptrs[i*3+2]->set(ddistdref_soma[i][2]);
 		}			
 	}	
 	// the common part
