@@ -89,7 +89,7 @@ void OuterProduct::calculate(){
   unsigned k;k=0;
   for(unsigned i=0;i<getNumberOfArguments();i++){
   	for(unsigned j=i;j<getNumberOfArguments();j++){
-		vptr[i]->set(getArgument(i)*getArgument(j));
+		vptr[k]->set(getArgument(i)*getArgument(j));
 		k++;	
 	}
   }	
