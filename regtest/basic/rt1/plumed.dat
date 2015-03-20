@@ -41,6 +41,11 @@ PRINT FILE=components6 ARG=ccd6.*
 PRINT FILE=components7 ARG=ccd7.*
 PRINT FILE=components8 ARG=ccd8.*
 
+# this is ok:
+PRINT FILE=test ARG=ccd2.test
+# this is triggering an error:
+# DUMPDERIVATIVES FILE=testd ARG=ccd2.test
+
 
 
 

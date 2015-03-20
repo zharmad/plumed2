@@ -133,6 +133,7 @@ void Distance::registerKeywords( Keywords& keys ){
   keys.addOutputComponent("x","COMPONENTS","the x-component of the vector connecting the two atoms");
   keys.addOutputComponent("y","COMPONENTS","the y-component of the vector connecting the two atoms");
   keys.addOutputComponent("z","COMPONENTS","the z-component of the vector connecting the two atoms");
+  keys.addOutputComponent("test","COMPONENTS","the z-component of the vector connecting the two atoms");
   keys.addOutputComponent("a","SCALED_COMPONENTS","the normalized projection on the first lattice vector of the vector connecting the two atoms");
   keys.addOutputComponent("b","SCALED_COMPONENTS","the normalized projection on the second lattice vector of the vector connecting the two atoms");
   keys.addOutputComponent("c","SCALED_COMPONENTS","the normalized projection on the third lattice vector of the vector connecting the two atoms");
@@ -165,6 +166,7 @@ pbc(true)
     addComponentWithDerivatives("x"); componentIsNotPeriodic("x");
     addComponentWithDerivatives("y"); componentIsNotPeriodic("y");
     addComponentWithDerivatives("z"); componentIsNotPeriodic("z");
+    addComponent("test"); componentIsNotPeriodic("test");
     log<<"  WARNING: components will not have the proper periodicity - see manual\n";
   } else if(scaled_components){
     addComponentWithDerivatives("a"); componentIsPeriodic("a","-0.5","+0.5");
@@ -210,6 +212,9 @@ void Distance::calculate(){
     setAtomsDerivatives (valuez,1,Vector(0,0,+1));
     setBoxDerivatives   (valuez,Tensor(distance,Vector(0,0,-1)));
     valuez->set(distance[2]);
+// this is a stupid test:
+    getPntrToComponent("test")->set(123.456);
+// 
   } else if(scaled_components){
     Value* valuea=getPntrToComponent("a");
     Value* valueb=getPntrToComponent("b");
