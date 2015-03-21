@@ -254,18 +254,16 @@ double RMSD::calc_PCAelements( const std::vector<Vector>& positions, std::vector
    double ret=0.;
    switch(alignmentMethod){
 	case SIMPLE:
-		plumed_merror("derivative of the refreence frame not implemented for SIMPLE alignmentMethod \n");	
-		break;	
+	  plumed_merror("derivative of the refreence frame not implemented for SIMPLE alignmentMethod \n");	
+	  break;	
         case OPTIMAL_FAST:
-//                if(align==displace) ret=optimalAlignment_DDistDRef_Rot_DRotDPos_DRotDRef<false,true>(align,displace,positions,reference,derivatives,DDistDRef, Rot, DRotDPos, DRotDRef,   squared);
- //               else                ret=optimalAlignment_DDistDRef_Rot_DRotDPos_DRotDRef<false,false>(align,displace,positions,reference,derivatives,DDistDRef, Rot, DRotDPos, DRotDRef,  squared);
-	        return optimalAlignment_PCA<false,false>(align,displace,positions,reference, alignedpositions, centeredpositions,centeredreference,Rotation,DDistDPos,DRotDPos,squared);	
-                break;
+	  if(align==displace) ret=optimalAlignment_PCA<false,true>(align,displace,positions,reference, alignedpositions, centeredpositions,centeredreference,Rotation,DDistDPos,DRotDPos,squared);
+	  else                ret=optimalAlignment_PCA<false,false>(align,displace,positions,reference, alignedpositions, centeredpositions,centeredreference,Rotation,DDistDPos,DRotDPos,squared);
+          break;
         case OPTIMAL:
-//                if(align==displace) ret=optimalAlignment_DDistDRef_Rot_DRotDPos_DRotDRef<true,true>(align,displace,positions,reference,derivatives,DDistDRef, Rot, DRotDPos, DRotDRef, squared);
-//                else              
-		return optimalAlignment_PCA<true,false>(align,displace,positions,reference,alignedpositions, centeredpositions,centeredreference,Rotation,DDistDPos,DRotDPos,squared); 
-                break;
+	  if(align==displace) ret=optimalAlignment_PCA<true,true>(align,displace,positions,reference, alignedpositions, centeredpositions,centeredreference,Rotation,DDistDPos,DRotDPos,squared);
+	  else                ret=optimalAlignment_PCA<true,false>(align,displace,positions,reference, alignedpositions, centeredpositions,centeredreference,Rotation,DDistDPos,DRotDPos,squared);
+          break;
   }	
   return ret;
 }
@@ -278,11 +276,13 @@ double RMSD::calc_FitElements( const std::vector<Vector>& positions, Tensor & Ro
 		plumed_merror("derivative of the refreence frame not implemented for SIMPLE alignmentMethod \n");	
 		break;	
         case OPTIMAL_FAST:
-	        return optimalAlignment_Fit<false,false>(align,displace,positions,reference, Rotation,DRotDPos,centeredpositions,center_positions,squared);	
-                break;
+	  if(align==displace)ret=optimalAlignment_Fit<false,true>(align,displace,positions,reference, Rotation,DRotDPos,centeredpositions,center_positions,squared);	
+	  else               ret=optimalAlignment_Fit<false,false>(align,displace,positions,reference, Rotation,DRotDPos,centeredpositions,center_positions,squared);
+          break;
         case OPTIMAL:
-		return optimalAlignment_Fit<true,false>(align,displace,positions,reference,Rotation,DRotDPos,centeredpositions,center_positions,squared); 
-                break;
+	  if(align==displace)ret=optimalAlignment_Fit<true,true>(align,displace,positions,reference,Rotation,DRotDPos,centeredpositions,center_positions,squared); 
+	  else               ret=optimalAlignment_Fit<true,false>(align,displace,positions,reference,Rotation,DRotDPos,centeredpositions,center_positions,squared); 
+          break;
   }	
   return ret;
 }

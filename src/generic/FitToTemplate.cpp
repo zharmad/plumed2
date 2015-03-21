@@ -154,9 +154,15 @@ ActionWithValue(ao)
   weights=pdb.getOccupancy();
   aligned=pdb.getAtomNumbers();
 
+
   // normalize weights
   double n=0.0; for(unsigned i=0;i<weights.size();++i) n+=weights[i]; n=1.0/n;
   for(unsigned i=0;i<weights.size();++i) weights[i]*=n;
+
+  // normalize weights for rmsd calculation
+  vector<double> weights_measure=pdb.getBeta();
+  n=0.0; for(unsigned i=0;i<weights_measure.size();++i) n+=weights_measure[i]; n=1.0/n;
+  for(unsigned i=0;i<weights_measure.size();++i) weights_measure[i]*=n;
 
   // subtract the center 
   for(unsigned i=0;i<weights.size();++i) center+=positions[i]*weights[i];
@@ -164,7 +170,7 @@ ActionWithValue(ao)
 
   if(type=="OPTIMAL" or type=="OPTIMAL-FAST" ){
 	  rmsd=new RMSD();
-          rmsd->set(weights,pdb.getBeta(),positions,type,false,false);// note: the reference is shifted now with center in the origin
+          rmsd->set(weights,weights_measure,positions,type,false,false);// note: the reference is shifted now with center in the origin
 	  log<<"  Method chosen for fitting: "<<rmsd->getMethod()<<" \n";
   }
   // register the value of rmsd (might be useful sometimes)
@@ -198,7 +204,7 @@ void FitToTemplate::calculate(){
 		}
 
 		// specific stuff that provides all that is needed
-  	        double r=rmsd->calc_FitElements( positions, rotation ,  drotdpos , centeredpositions, center_positions ,false);
+  	        double r=rmsd->calc_FitElements( positions, rotation ,  drotdpos , centeredpositions, center_positions);
 		setValue(r);
 		for(unsigned i=0;i<getTotAtoms();i++){
 			Vector & ato (modifyPosition(AtomNumber::index(i)));
