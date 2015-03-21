@@ -271,17 +271,17 @@ double RMSD::calc_PCAelements( const std::vector<Vector>& positions, std::vector
 }
 
 
-double RMSD::calc_FitElements( const std::vector<Vector>& positions, Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, Vector &com_positions, Vector &com_reference, const bool& squared  ){
+double RMSD::calc_FitElements( const std::vector<Vector>& positions, Tensor & Rotation, Matrix<std::vector<Vector> > & DRotDPos, std::vector<Vector> & centeredpositions, Vector &center_positions, const bool& squared  ){
    double ret=0.;
    switch(alignmentMethod){
 	case SIMPLE:
 		plumed_merror("derivative of the refreence frame not implemented for SIMPLE alignmentMethod \n");	
 		break;	
         case OPTIMAL_FAST:
-	        return optimalAlignment_Fit<false,false>(align,displace,positions,reference, Rotation,DRotDPos,com_positions,com_reference,squared);	
+	        return optimalAlignment_Fit<false,false>(align,displace,positions,reference, Rotation,DRotDPos,centeredpositions,center_positions,squared);	
                 break;
         case OPTIMAL:
-		return optimalAlignment_Fit<true,false>(align,displace,positions,reference,Rotation,DRotDPos,com_positions,com_reference,squared); 
+		return optimalAlignment_Fit<true,false>(align,displace,positions,reference,Rotation,DRotDPos,centeredpositions,center_positions,squared); 
                 break;
   }	
   return ret;
@@ -749,8 +749,8 @@ double RMSD::optimalAlignment_Fit(const  std::vector<double>  & align,
                             const std::vector<Vector> & reference,
                             Tensor & Rotation,
                             Matrix<std::vector<Vector> > & DRotDPos,
-                            Vector &com_positions,
-                            Vector &com_reference,	
+			    std::vector<Vector> & centeredpositions,
+			    Vector & center_positions,
                             bool squared){
    //initialize the data into the structure
    // typically the positions do not have the com neither calculated nor subtracted. This layer takes care of this business
@@ -768,12 +768,14 @@ double RMSD::optimalAlignment_Fit(const  std::vector<double>  & align,
    cd.doCoreCalc(safe,alEqDis); 
    // make the core calc distance
    double dist=cd.getDistance(squared); 
+   // get the rotation matrix
+   Rotation=cd.getRotationMatrixPositionsToReference(); 
    // get its derivative
    DRotDPos=cd.getDRotationDPositions(true); // this gives back the inverse  
-   //
-   com_positions=cd.getPositionsCenter();
-   com_reference=cd.getReferenceCenter();
-
+   // get centered positions
+   centeredpositions=cd.getCenteredPositions();
+  // get center
+   center_positions=cd.getPositionsCenter();
    return dist;
 }
 
