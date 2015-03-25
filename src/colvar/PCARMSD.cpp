@@ -147,7 +147,8 @@ PLUMED_COLVAR_INIT(ao),squared(true)
   } 
   // the components 
   for(unsigned i=0;i<neigenvects;i++){
-        string name; name=string("pca-")+std::to_string(i);
+        string xx; Tools::convert(i,xx);
+        string name; name=string("pca-")+xx;
 	pca_names.push_back(name);
 	addComponentWithDerivatives(name.c_str()); componentIsNotPeriodic(name.c_str());	
   }  
