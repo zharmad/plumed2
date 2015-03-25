@@ -121,6 +121,7 @@ public:
 PLUMED_REGISTER_ACTION(FitToTemplate,"FIT_TO_TEMPLATE")
 
 void FitToTemplate::registerKeywords( Keywords& keys ){
+  Action::registerKeywords( keys );
   ActionAtomistic::registerKeywords( keys );
   keys.add("compulsory","STRIDE","1","the frequency with which molecules are reassembled.  Unless you are completely certain about what you are doing leave this set equal to 1!");
   keys.add("compulsory","REFERENCE","a file in pdb format containing the reference structure and the atoms involved in the CV.");
@@ -218,8 +219,6 @@ void FitToTemplate::apply(){
   if (type=="SIMPLE") {
   	Vector totForce;
   	for(unsigned i=0;i<getTotAtoms();i++){
-  	  Vector & ato (modifyPosition(AtomNumber::index(i)));
-  	  ato-=shift;
   	  totForce+=modifyForce(AtomNumber::index(i));
   	}
   	for(unsigned i=0;i<aligned.size();++i){

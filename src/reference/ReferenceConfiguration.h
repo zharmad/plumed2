@@ -1,5 +1,5 @@
 /* +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-   Copyright (c) 2013,2014 The plumed team
+   Copyright (c) 2013-2015 The plumed team
    (see the PEOPLE file at the root of the distribution for a list of names)
 
    See http://www.plumed-code.org for more information.
@@ -143,7 +143,7 @@ public:
   virtual double getReferenceArgument( const unsigned& i ){ plumed_error(); return 0.0; }
 /// These are overwritten in ReferenceArguments and ReferenceAtoms but are required here 
 /// to make PLMD::distance work
-  virtual const std::vector<Vector>& getReferencePositions();
+  virtual const std::vector<Vector>& getReferencePositions()const;
   virtual const std::vector<double>& getReferenceArguments(); 
   virtual const std::vector<double>& getReferenceMetric();
 /// These are overwritten in ReferenceArguments and ReferenceAtoms to make frame copying work
@@ -196,7 +196,7 @@ bool ReferenceConfiguration::parseVector(const std::string&key,std::vector<T>&t,
 }
 
 inline
-const std::vector<Vector>& ReferenceConfiguration::getReferencePositions(){
+const std::vector<Vector>& ReferenceConfiguration::getReferencePositions()const{
   return fake_refatoms;
 }
 

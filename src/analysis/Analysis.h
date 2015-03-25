@@ -139,6 +139,7 @@ public:
   void prepare();
   void calculate();
   void update();
+  void accumulate();
   /// run analysis in blocks every freq and clears the data: just when RUN is set (and no USE_ALL_DATA) 
   virtual void performAnalysis()=0;  
   /// run intermediate analysis every stride without clearing the block (just check how the calc is going, e.g. a running avg): useful for both
