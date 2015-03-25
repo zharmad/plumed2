@@ -201,7 +201,7 @@ void PCAVars::registerKeywords( Keywords& keys ){
   ActionAtomistic::registerKeywords( keys );
   ActionWithArguments::registerKeywords( keys );
   componentsAreNotOptional(keys);
-  keys.addOutputComponent("eig-","default","the projections on each eigenvalue are stored on values labeled eig-1, eig-2, ..."); 
+  keys.addOutputComponent("eig_","default","the projections on each eigenvalue are stored on values labeled eig_1, eig_2, ..."); 
   keys.addOutputComponent("residual","default","the distance of the configuration from the linear subspace defined "
                                                "by the vectors, \\f$e_i\\f$, that are contained in the rows of \\f$A\\f$.  In other words this is "
                                                "\\f$\\sqrt( r^2 - \\sum_i [\\mathbf{r}.\\mathbf{e_i}]^2)\\f$ where "
@@ -298,7 +298,7 @@ ActionWithArguments(ao)
 
       // Create a component to store the output
       std::string num; Tools::convert( i, num );
-      addComponentWithDerivatives("eig-"+num); componentIsNotPeriodic("eig-"+num);
+      addComponentWithDerivatives("eig_"+num); componentIsNotPeriodic("eig_"+num);
   }
   addComponentWithDerivatives("residual"); componentIsNotPeriodic("residual");
 

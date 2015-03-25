@@ -1,4 +1,4 @@
-#! FIELDS time parameter pca.eig-1 pca.eig-2 pca.residual
+#! FIELDS time parameter pca.eig_1 pca.eig_2 pca.residual
  0.000000 0   0.0841  -0.0518   0.0970
  0.000000 1   0.5491  -0.0575  -0.1486
  0.000000 2  -0.0312   0.0746  -0.0751
