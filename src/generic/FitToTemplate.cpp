@@ -219,10 +219,12 @@ void FitToTemplate::apply(){
   if (type=="SIMPLE") {
   	Vector totForce;
   	for(unsigned i=0;i<getTotAtoms();i++){
-  	  totForce+=modifyForce(AtomNumber::index(i));
+  	  totForce+=modifyGlobalForce(AtomNumber::index(i));
   	}
+        Tensor & vv(modifyGlobalVirial());
+        vv+=Tensor(center,totForce);
   	for(unsigned i=0;i<aligned.size();++i){
-  	  Vector & ff(modifyForce(aligned[i]));
+  	  Vector & ff(modifyGlobalForce(aligned[i]));
   	  ff-=totForce*weights[i];
   	}
   } else if ( type=="OPTIMAL" or type=="OPTIMAL-FAST") { 
@@ -230,7 +232,7 @@ void FitToTemplate::apply(){
 	vector<Vector> rotatedforce(getTotAtoms());
 	// first: the term needed by everyone
   	for(unsigned i=0;i<getTotAtoms();i++){
-		Vector &force=modifyForce(AtomNumber::index(i));
+		Vector &force=modifyGlobalForce(AtomNumber::index(i));
 		rotatedforce[i]=matmul(rotation,force);
 	}	
 	// term with derivative with respect of the com (again, only for atoms involved in the optimal alignment)
@@ -244,14 +246,14 @@ void FitToTemplate::apply(){
 	for(unsigned i=0;i<getTotAtoms(); i++) {
 		Vector &pos_i=modifyPosition(AtomNumber::index(i));
 		for(unsigned j=0;j<aligned.size(); j++) {
-			Vector &force_j=modifyForce(aligned[j]);
+			Vector &force_j=modifyGlobalForce(aligned[j]);
 			for(unsigned k=0;k<3;k++){	
 				Tensor a_j=RMSD::getMatrixFromDRot(drotdpos,j,k);
 				rotatedforce[i][k]+=dotProduct(matmul(a_j,pos_i-center_positions),force_j);	
 			}	
 		}
 		// sum all
-		Vector &force=modifyForce(AtomNumber::index(i));	
+		Vector &force=modifyGlobalForce(AtomNumber::index(i));	
 		force=rotatedforce[i];
 	}	
 
