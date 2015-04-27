@@ -294,7 +294,6 @@ void RMSD::calculate(){
 	for(unsigned i=0;i<getNumberOfAtoms();i++) setAtomsDerivatives( i, derivs[i] );
   }
 
-  Tensor virial; plumed_dbg_assert( !rmsd->getVirial(virial) );
   setBoxDerivativesNoPbc();
 
 }
