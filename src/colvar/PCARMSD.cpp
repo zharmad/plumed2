@@ -51,7 +51,9 @@ using namespace std;
 
 //+PLUMEDOC DCOLVAR PCARMSD 
 /*
-Calculate the PCA components for a number of provided eigenvectors and an average structure. Performs optimal alignment at every step. 
+Calculate the PCA components ( see \cite Sutto:2010 and \cite spiwok )  for a number of provided eigenvectors and an average structure. Performs optimal alignment at every step and reports the rmsd so you know if you are far or close from the average structure.
+It takes the average structure and eigenvectors in form of a pdb.
+Note that beta and occupancy values in the pdb are neglected and all the weights are placed to 1 (differently from the RMSD colvar for example)
 
 \par Examples
 
@@ -59,7 +61,7 @@ Calculate the PCA components for a number of provided eigenvectors and an averag
 PCARMSD AVERAGE=file.pdb EIGENVECTORS=eigenvectors.pdb 
 \endverbatim
 
-...
+The input is taken so to be compatible with the output you get from g_covar utility of gromacs (suitably adapted to have a pdb input format). 
 
 */
 //+ENDPLUMEDOC
@@ -70,10 +72,10 @@ void PCARMSD::registerKeywords(Keywords& keys){
   Colvar::registerKeywords(keys);
   keys.add("compulsory","AVERAGE","a file in pdb format containing the reference structure and the atoms involved in the CV.");
   keys.add("compulsory","EIGENVECTORS","a file in pdb format containing the reference structure and the atoms involved in the CV.");
-  useCustomisableComponents(keys);
-  keys.addOutputComponent("err","COMPONENTS","the error component ");
-  //keys.add("compulsory","TYPE","SIMPLE","the manner in which RMSD alignment is performed.  Should be OPTIMAL or SIMPLE.");
-  //keys.addFlag("SQUARED",false," This should be setted if you want MSD instead of RMSD ");
+  //useCustomisableComponents(keys);
+  keys.addOutputComponent("eig","default","the projections on each eigenvalue are stored on values labeled eig-1, eig-2, ...");
+  keys.addOutputComponent("residual","default","the distance of the present configuration from the configuration supplied as AVERAGE in terms of MSD after optimal alignment ");
+  keys.addFlag("SQUARED-ROOT",false," This should be setted if you want RMSD instead of MSD ");
 }
 
 PCARMSD::PCARMSD(const ActionOptions&ao):
@@ -85,6 +87,8 @@ PLUMED_COLVAR_INIT(ao),squared(true)
   type.assign("OPTIMAL");
   string f_eigenvectors;
   parse("EIGENVECTORS",f_eigenvectors);
+  bool sq;  parseFlag("SQUARED-ROOT",sq);
+  if (sq){ squared=false; }
   checkRead();
 
   PDB pdb;
@@ -93,26 +97,24 @@ PLUMED_COLVAR_INIT(ao),squared(true)
   if( !pdb.read(f_average,plumed.getAtoms().usingNaturalUnits(),0.1/atoms.getUnits().getLength()) )
       error("missing input file " + f_average );
 
-
   rmsd = new RMSD();
   bool remove_com=true;
   bool normalize_weights=true;
   // here align and displace are a simple vector of ones
   std::vector<double> align; align=pdb.getOccupancy();for(unsigned i=0;i<align.size();i++){align[i]=1.;} ;
   std::vector<double> displace;  displace=pdb.getBeta();for(unsigned i=0;i<displace.size();i++){displace[i]=1.;} ; 
-  log.printf("SIZE OF ALIGN: %d \n",align.size());
-  for(unsigned i=0;i<align.size();i++){log.printf("AL %f\n",align[i]);}
-  log.printf("SIZE OF DISPLACE: %d \n",align.size());
-  for(unsigned i=0;i<displace.size();i++){log.printf("DIS %f\n",displace[i]);}
   // reset again to reimpose unifrom weights (safe to disable this)
   rmsd->set(align,displace,pdb.getPositions(),type,remove_com,normalize_weights);
   requestAtoms( pdb.getAtomNumbers() );
 
-  addComponentWithDerivatives("err"); componentIsNotPeriodic("err"); 
+  addComponentWithDerivatives("residual"); componentIsNotPeriodic("residual"); 
 
   log.printf("  average from file %s\n",f_average.c_str());
   log.printf("  which contains %d atoms\n",getNumberOfAtoms());
   log.printf("  method for alignment : %s \n",type.c_str() );
+
+  log<<"  Bibliography "<<plumed.cite("Spiwok, Lipovova and Kralova, JPCB, 111, 3073 (2007)  ");
+  log<<" "<<plumed.cite( "Sutto, D'Abramo, Gervasio, JCTC, 6, 3640 (2010)");
 
   // now get the eigenvectors 
   // open the file
@@ -147,8 +149,8 @@ PLUMED_COLVAR_INIT(ao),squared(true)
   } 
   // the components 
   for(unsigned i=0;i<neigenvects;i++){
-        string xx; Tools::convert(i,xx);
-        string name; name=string("pca_")+xx;
+        std::string num; Tools::convert( i, num );
+        string name; name=string("eig-")+num;
 	pca_names.push_back(name);
 	addComponentWithDerivatives(name.c_str()); componentIsNotPeriodic(name.c_str());	
   }  
@@ -174,7 +176,7 @@ void PCARMSD::calculate(){
         double r=rmsd->calc_PCAelements( getPositions(), ddistdpos, rotation ,  drotdpos , alignedpos ,centeredpos, centeredref ,squared);
 	invrotation=rotation.transpose();
 	
-	Value* verr=getPntrToComponent("err");
+	Value* verr=getPntrToComponent("residual");
 	verr->set(r);
 	for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
 		        setAtomsDerivatives (verr,iat,ddistdpos[iat]);
@@ -184,33 +186,23 @@ void PCARMSD::calculate(){
 	der.resize(getNumberOfAtoms());
 
 
-	// (type OPTIMAL with homogeneous weights, normalized weights, squared=true)
-	// 1) centeredpos
-	// 2) drotdpos   
-	// 3) invrotation
-	// 4) ddistdpos   OK
-	// 5) centeredref OK
-	// 6) alignedpos OK
-	// 7) err OK
 	for(unsigned i=0;i<eigenvectors.size();i++){
 		Value* value=getPntrToComponent(pca_names[i].c_str());
 		double val;val=0.;
 		for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
-			val+=dotProduct(alignedpos[iat]-centeredref[iat],eigenvectors[i][iat]);	
+			val+=dotProduct(alignedpos[iat]-centeredref[iat],eigenvectors[i][iat]);	der[iat].zero();
 		}
 		value->set(val);
 		// here the loop is reversed to better suit the structure of the derivative of the rotation matrix
 		double tmp1;
-		der.clear();
 		for(unsigned a=0;a<3;a++){
 			for(unsigned b=0;b<3;b++){
+				tmp1=0.;
+				for(unsigned n=0;n<getNumberOfAtoms();n++){
+					tmp1+=centeredpos[n][b]*eigenvectors[i][n][a];
+				}
 				for(unsigned iat=0;iat<getNumberOfAtoms();iat++){
-					tmp1=0.;
-					for(unsigned n=0;n<getNumberOfAtoms();n++){
-						tmp1+=centeredpos[n][b]*eigenvectors[i][n][a];
-					}
 					der[iat]+=drotdpos[a][b][iat]*tmp1;	
-		//			log.printf("XXXXX  %d %d %d : %f %f %f\n",a,b,iat,drotdpos[a][b][iat][0],drotdpos[a][b][iat][1],drotdpos[a][b][iat][2]);
 				}
 			}
 		}
@@ -224,7 +216,7 @@ void PCARMSD::calculate(){
 		}		
  	 }
 
-  setBoxDerivativesNoPbc();
+         for(unsigned i=0;i<getNumberOfComponents();++i) setBoxDerivativesNoPbc( getPntrToComponent(i) );
 
 }
 
