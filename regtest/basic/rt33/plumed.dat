@@ -1,0 +1,10 @@
+RESTART
+d: DISTANCE ATOMS=1,2 COMPONENTS
+c: DISTANCE ATOMS=1,3 COMPONENTS
+
+e1:  EXTERNAL FILE=grid1 ARG=d.x
+e2:  EXTERNAL FILE=grid2 ARG=d.y,d.z
+e3:  EXTERNAL FILE=grid3 ARG=c.x,c.y,c.z
+PRINT ARG=d.*,(e.\.bias) FILE=colvar
+
+
