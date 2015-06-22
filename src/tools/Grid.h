@@ -68,6 +68,7 @@ class KernelFunctions;
 /// \ingroup TOOLBOX
 class Grid  
 {
+  const bool old_splines;
  std::vector<double> grid_;
  std::vector< std::vector<double> > der_;
 protected:

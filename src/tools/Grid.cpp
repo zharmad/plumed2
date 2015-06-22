@@ -25,6 +25,7 @@
 #include <sstream>
 #include <cstdio>
 #include <cfloat>
+#include <cstdlib>
 
 #include "Grid.h"
 #include "Tools.h"
@@ -37,7 +38,9 @@ using namespace std;
 namespace PLMD{
 
 Grid::Grid(const std::string& funcl, std::vector<Value*> args, const vector<std::string> & gmin, 
-           const vector<std::string> & gmax, const vector<unsigned> & nbin, bool dospline, bool usederiv, bool doclear){
+           const vector<std::string> & gmax, const vector<unsigned> & nbin, bool dospline, bool usederiv, bool doclear):
+  old_splines(std::getenv("PLUMED_OLDSPLINES"))
+{
 // various checks
  plumed_massert(args.size()==gmin.size(),"grid dimensions in input do not match number of arguments");
  plumed_massert(args.size()==nbin.size(),"grid dimensions in input do not match number of arguments");
@@ -66,7 +69,9 @@ Grid::Grid(const std::string& funcl, std::vector<Value*> args, const vector<std:
 }
 
 Grid::Grid(const std::string& funcl, const std::vector<string> &names, const std::vector<std::string> & gmin, 
-           const vector<std::string> & gmax, const std::vector<unsigned> & nbin, bool dospline, bool usederiv, bool doclear, const std::vector<bool> &isperiodic, const std::vector<std::string> &pmin, const std::vector<std::string> &pmax ){
+           const vector<std::string> & gmax, const std::vector<unsigned> & nbin, bool dospline, bool usederiv, bool doclear, const std::vector<bool> &isperiodic, const std::vector<std::string> &pmin, const std::vector<std::string> &pmax ):
+  old_splines(std::getenv("PLUMED_OLDSPLINES"))
+{
  // this calls the initializator
  Init(funcl,names,gmin,gmax,nbin,dospline,usederiv,doclear,isperiodic,pmin,pmax);
 }
@@ -409,7 +414,9 @@ double Grid::getValueAndDerivatives
   double X,X2,X3,value;
   vector<double> fd(dimension_);
   vector<double> C(dimension_);
+  vector<double> Cp(dimension_);
   vector<double> D(dimension_);
+  vector<double> Dp(dimension_);
   vector<double> dder(dimension_);
 // reset
   value=0.0;
@@ -423,29 +430,62 @@ double Grid::getValueAndDerivatives
   for(unsigned int ipoint=0;ipoint<neigh.size();++ipoint){
    double grid=getValueAndDerivatives(neigh[ipoint],dder);
    vector<unsigned> nindices=getIndices(neigh[ipoint]);
-   double ff=1.0;
 
-   for(unsigned j=0;j<dimension_;++j){
-    int x0=1;
-    if(nindices[j]==indices[j]) x0=0;
-    double dx=getDx()[j];
-    X=fabs((x[j]-xfloor[j])/dx-(double)x0);
-    X2=X*X;
-    X3=X2*X;
-    double yy;
-    if(fabs(grid)<0.0000001) yy=0.0;
-      else yy=-dder[j]/grid;
-    C[j]=(1.0-3.0*X2+2.0*X3) - (x0?-1.0:1.0)*yy*(X-2.0*X2+X3)*dx;
-    D[j]=( -6.0*X +6.0*X2) - (x0?-1.0:1.0)*yy*(1.0-4.0*X +3.0*X2)*dx; 
-    D[j]*=(x0?-1.0:1.0)/dx;
-    ff*=C[j];
+   if(old_splines){
+     double ff=1.0;
+     for(unsigned j=0;j<dimension_;++j){
+      int x0=1;
+      if(nindices[j]==indices[j]) x0=0;
+      double dx=getDx()[j];
+      X=fabs((x[j]-xfloor[j])/dx-(double)x0);
+      X2=X*X;
+      X3=X2*X;
+      double yy;
+      if(fabs(grid)<0.0000001) yy=0.0;
+        else yy=-dder[j]/grid;
+      C[j]=(1.0-3.0*X2+2.0*X3) - (x0?-1.0:1.0)*yy*(X-2.0*X2+X3)*dx;
+      D[j]=( -6.0*X +6.0*X2) - (x0?-1.0:1.0)*yy*(1.0-4.0*X +3.0*X2)*dx; 
+      D[j]*=(x0?-1.0:1.0)/dx;
+      ff*=C[j];
+     }
+     for(unsigned j=0;j<dimension_;++j){
+      fd[j]=D[j];
+      for(unsigned i=0;i<dimension_;++i) if(i!=j) fd[j]*=C[i];
+     }
+     value+=grid*ff;
+     for(unsigned j=0;j<dimension_;++j) der[j]+=grid*fd[j];
+   } else {
+     for(unsigned j=0;j<dimension_;++j){
+       int x0=1;
+       if(nindices[j]==indices[j]) x0=0;
+       const double dx=getDx()[j];
+       const double invdx=1.0/dx;
+       X=(x[j]-xfloor[j])*invdx;
+       if(x0) X=1-X;
+       X2=X*X;
+       X3=X2*X;
+       C[j]=(1.0-3.0*X2+2.0*X3);    // basis function for value (1-3x**2+2x**3)
+       Cp[j]=(-6.0*X+6.0*X2)*invdx; // its derivative (-6x+6x**2)
+       if(x0) Cp[j]*=-1;
+       double t=1.0/(2.0*X+1.0);
+       D[j]=dx*X*t;                 // basis function for derivative (x-2x**2+x**3)/(1-3x**2+2x**3) = x/(1+2x)
+       if(x0) D[j]*=-1;
+       Dp[j]=t*t;                   // its derivative  1/(1+2x)**2
+     }
+     double prodC=1.0;              // compute the product of all Cs
+     double sumD=0.0;                 // compute the sum of all derivatives, weighted with the derivative
+     for(unsigned j=0;j<dimension_;++j){
+      prodC*=C[j];
+      sumD+=dder[j]*D[j];
+     }
+     value+=(grid+sumD)*prodC;
+
+     for(unsigned j=0;j<dimension_;++j){
+       double prodCp=Cp[j];
+       for(unsigned k=0;k<dimension_;++k) if(k!=j) prodCp*=C[k];
+       der[j]+=prodCp*(grid+sumD) + dder[j]*prodC*Dp[j];
+     }
    }
-   for(unsigned j=0;j<dimension_;++j){
-    fd[j]=D[j];
-    for(unsigned i=0;i<dimension_;++i) if(i!=j) fd[j]*=C[i];
-   }
-   value+=grid*ff;
-   for(unsigned j=0;j<dimension_;++j) der[j]+=grid*fd[j];
   }
   return value;
  }else{
