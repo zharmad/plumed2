@@ -1,0 +1,8 @@
+#! FIELDS d.x e1p.bias der_d.x
+#! SET min_d.x 0
+#! SET max_d.x 1
+#! SET nbins_d.x  3
+#! SET periodic_d.x false
+0.000000000 2 0
+0.500000000 1.875 -0.25
+1.000000000 2 1

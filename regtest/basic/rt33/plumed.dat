@@ -1,10 +1,37 @@
-RESTART
 d: DISTANCE ATOMS=1,2 COMPONENTS
 c: DISTANCE ATOMS=1,3 COMPONENTS
 
+# for these potentials (linear functions) I explicitly check the forces
 e1:  EXTERNAL FILE=grid1 ARG=d.x
 e2:  EXTERNAL FILE=grid2 ARG=d.y,d.z
 e3:  EXTERNAL FILE=grid3 ARG=c.x,c.y,c.z
+
+# for these other potentials (quadratic/cubic functions) I just check if they are properly
+# cancelled by an equivalent COMBINE potential
+# notice that the splines are exact only for sums of polynomials
+# any product term (e.g. x*y) is going to give an imperfect cancellation
+
+# commenting the following triplets of lines the forces should be unaffected
+e1p: EXTERNAL FILE=grid1poly ARG=d.x
+e1m: COMBINE ARG=d.x,d.x,d.x POWERS=3,2,0 COEFFICIENTS=-1,+1,-2 PERIODIC=NO
+# e1m: MATHEVAL ARG=d.x FUNC=-(x^3-x^2+2) PERIODIC=NO
+e1b: BIASVALUE ARG=e1m
+
+# commenting the following triplets of lines the forces should be unaffected
+e2p: EXTERNAL FILE=grid2poly ARG=d.y,d.z 
+e2m: COMBINE ARG=d.y,d.y,d.z POWERS=3,2,2 COEFFICIENTS=-1,+1,-1 PERIODIC=NO
+# e2m: MATHEVAL ARG=d.y,d.z FUNC=-(x^3-x^2+y^2) PERIODIC=NO
+e2b: BIASVALUE ARG=e2m
+
+# commenting the following triplets of lines the forces should be unaffected
+e3p: EXTERNAL FILE=grid3poly ARG=c.x,c.y,c.z
+e3m: COMBINE ARG=c.x,c.y,c.y,c.z POWERS=1,3,1,3 COEFFICIENTS=-1,-1,-1,+1 PERIODIC=NO
+# e3m: MATHEVAL ARG=c.x,c.y,c.z FUNC=-(x+y^3+y-z^3) PERIODIC=NO
+e3b: BIASVALUE ARG=e3m
+
 PRINT ARG=d.*,(e.\.bias) FILE=colvar
+PRINT ARG=d.*,(e1.\.bias) FILE=colvar1
+PRINT ARG=d.*,(e2.\.bias) FILE=colvar2
+PRINT ARG=d.*,(e3.\.bias) FILE=colvar3
 
 
