@@ -20,7 +20,6 @@
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
 #include "core/ActionRegister.h"
-#include "tools/HistogramBead.h"
 #include "Gradient.h"
 
 namespace PLMD {
@@ -33,8 +32,8 @@ void Gradient::registerKeywords( Keywords& keys ){
   keys.add("atoms","ORIGIN","we will use the position of this atom as the origin in our calculation");
   keys.add("compulsory","DIR","xyz","the directions in which we are calculating the graident.  Should be x, y, z, xy, xz, yz or xyz");
   keys.add("compulsory","NBINS","number of bins to use in each direction for the calculation of the gradient");
-  keys.add("compulsory","SIGMA","1.0","the width of the function to be used for kernel density estimation");
-  keys.add("compulsory","KERNEL","gaussian","the type of kernel function to be used");
+  keys.add("compulsory","SWITCH","parameters for the switching function to be used to determine which bin a particular atom inside. "
+                                 "See \\ref histogrambead for more information on what functions are available");
 }
 
 Gradient::Gradient(const ActionOptions&ao):
@@ -89,7 +88,9 @@ nbins(3)
   std::transform( functype.begin(), functype.end(), functype.begin(), tolower );
   log.printf("  calculating gradient of %s in %s direction \n",functype.c_str(), direction.c_str() ); 
 
-  parse("SIGMA",sigma); parse("KERNEL",kerneltype); 
+  std::string errors, sparams; parse("SWITCH",sparams); 
+  bead.set(sparams,errors); bead.isNotPeriodic();
+  if( errors.length()!=0 ) error(errors);
   checkRead(); requestAtoms(atom);
 
   // And setup the vessel
@@ -103,9 +104,6 @@ void Gradient::setupRegions(){
 }
 
 void Gradient::calculateAllVolumes( const unsigned& curr, MultiValue& outvals ) const {
-  // Setup the bead
-  HistogramBead bead; bead.isNotPeriodic(); bead.setKernelType( kerneltype );  
-
   Vector cpos = pbcDistance( getPosition(0), getPntrToMultiColvar()->getCentralAtomPos( curr ) );
   // Note we use the pbc from base multicolvar so that we get numerical derivatives correct
   Vector oderiv, fpos = (getPntrToMultiColvar()->getPbc()).realToScaled( cpos );  
@@ -115,9 +113,7 @@ void Gradient::calculateAllVolumes( const unsigned& curr, MultiValue& outvals ) 
       deriv[0]=deriv[1]=deriv[2]=0.0;
       double delx = 1.0 / static_cast<double>( nbins[idir] );
       for(unsigned jbead=0;jbead<nbins[idir];++jbead){
-          // Calculate what box we are in
-          bead.set( -0.5+jbead*delx, -0.5+(jbead+1)*delx, sigma );
-          double weight=bead.calculate( fpos[0], deriv[idir] );
+          double weight=bead.setBoundsAndCalculate( -0.5+jbead*delx, -0.5+(jbead+1)*delx, fpos[0], deriv[idir] );
           oderiv = (getPntrToMultiColvar()->getPbc()).realToScaled( deriv );          
           // Set and derivatives
           refder[0]=-oderiv; // vir = -Tensor(cpos,oderiv);

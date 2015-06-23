@@ -29,8 +29,8 @@ void ActionVolume::registerKeywords( Keywords& keys ){
   if( keys.reserved("VMEAN") ) keys.use("VMEAN");
   keys.use("MEAN"); keys.use("LESS_THAN"); keys.use("MORE_THAN");
   keys.use("BETWEEN"); keys.use("HISTOGRAM");
-  keys.add("compulsory","SIGMA","the width of the function to be used for kernel density estimation");
-  keys.add("compulsory","KERNEL","gaussian","the type of kernel function to be used");
+  keys.add("compulsory","SWITCH","the switching function to use to determine whether or not atoms are inside the region of intereset. "
+                                 "For more information see \\ref histogrambead");
   keys.addFlag("OUTSIDE",false,"calculate quantities for colvars that are on atoms outside the region of interest");
 }
 
@@ -48,9 +48,9 @@ VolumeGradientBase(ao)
   std::transform( functype.begin(), functype.end(), functype.begin(), tolower );
   log.printf("  calculating %s inside region of insterest\n",functype.c_str() ); 
 
-  parseFlag("OUTSIDE",not_in); sigma=0.0;
-  if( keywords.exists("SIGMA") ) parse("SIGMA",sigma); 
-  if( keywords.exists("KERNEL") ) parse("KERNEL",kerneltype); 
+  parseFlag("OUTSIDE",not_in); 
+  std::string errors, hinput; parse("SWITCH",hinput); 
+  bead.set(hinput, errors); bead.isNotPeriodic();
   
   if( getPntrToMultiColvar()->isDensity() ){
      std::string input;

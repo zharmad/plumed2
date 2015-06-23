@@ -23,6 +23,7 @@
 #define __PLUMED_crystallization_Gradient_h
 
 #include "multicolvar/VolumeGradientBase.h"
+#include "tools/NewHistogramBead.h"
 
 namespace PLMD {
 namespace crystallisation {
@@ -30,14 +31,12 @@ namespace crystallisation {
 class Gradient : public multicolvar::VolumeGradientBase {
 friend class GradientVessel;
 private:
-/// The value of sigma
-  double sigma;
 /// Number of quantities in use in this colvar
   unsigned vend, nquantities;
 /// Number of bins in each direction
   std::vector<unsigned> nbins;
-/// The type of kernel for the histogram
-  std::string kerneltype;
+///
+  NewHistogramBead bead;
 public:
   static void registerKeywords( Keywords& keys );
   Gradient(const ActionOptions&);

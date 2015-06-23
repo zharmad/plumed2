@@ -82,7 +82,14 @@ s(r) = \left[ 1 + ( 2^{a/b} -1 )\left( \frac{r-d_0}{r_0} \right)^a \right]^{-b/a
 </td> <td>
 {SMAP R_0=\f$r_0\f$ D_0=\f$d_0\f$ A=\f$a\f$ B=\f$b\f$}
 </td> <td> \f$d_0=0.0\f$ </td>
-</tr> <tr> 
+</tr> <tr>
+<td> CERF </td> <td>
+\f$
+s(r) = 1 - \int_{-\infty}^r \exp\left(-\frac{ (r' - d_0)^2 }{ 2r_0^2 }\right) \textrm{d}r'
+\f$
+</td> <td>
+{CERF R_0=\f$r_0\f$ D_0=\f$d_0\f$}
+</tr> <tr>
 <td> CUBIC </td> <td>
 \f$
 s(r) = (y-1)^2(1+2y) \qquad \textrm{where} \quad y = \frac{r - r_1}{r_0-r_1}
@@ -97,6 +104,14 @@ s(r) = 1 - \tanh\left( \frac{ r - d_0 }{ r_0 } \right)
 \f$
 </td> <td>
 {TANH R_0=\f$r_0\f$ D_0=\f$d_0\f$}
+</td> <td> </td>
+</tr> <tr> 
+<td> TRIANGULAR </td> <td>
+\f$
+s(r) = \frac{r - d_0}{r_0} *( \frac{ r - d_0 }{ r_0 }  - 2 ) + 1 
+\f$
+</td> <td>
+{TRIANGULAR R_0=\f$r_0\f$}
 </td> <td> </td>
 </tr>
 </table>
@@ -155,6 +170,7 @@ void SwitchingFunction::set(const std::string & definition,std::string& errormsg
   } else {
      bool found_r0=Tools::parse(data,"R_0",r0);
      if(!found_r0) errormsg="R_0 is required";
+     if(name=="TRIANGULAR") dmax=r0;
   }
   invr0=1.0/r0;
   invr0_2=invr0*invr0;
@@ -173,8 +189,10 @@ void SwitchingFunction::set(const std::string & definition,std::string& errormsg
     d = -static_cast<double>(b) / static_cast<double>(a);
   } else if(name=="EXP") type=exponential;
   else if(name=="GAUSSIAN") type=gaussian;
+  else if(name=="CERF") type=cerf;
   else if(name=="CUBIC") type=cubic;
   else if(name=="TANH") type=tanh;
+  else if(name=="TRIANGULAR") type=triangular;
   else errormsg="cannot understand switching function type '"+name+"'";
   if( !data.empty() ){
       errormsg="found the following rogue keywords in switching function input : ";
@@ -199,12 +217,16 @@ std::string SwitchingFunction::description() const {
      ostr<<"exponential";
   } else if(type==gaussian){
      ostr<<"gaussian";
+  } else if(type==cerf){
+     ostr<<"complementary error function";
   } else if(type==smap){
      ostr<<"smap";
   } else if(type==cubic){
      ostr<<"cubic";
   } else if(type==tanh){
      ostr<<"tanh";
+  } else if(type==triangular){
+     ostr<<"triangular";
   } else{
      plumed_merror("Unknown switching function type");
   }
@@ -275,6 +297,8 @@ double SwitchingFunction::calculate(double distance,double&dfunc)const{
   if(rdist<=0.){
      result=1.;
      dfunc=0.0;
+     if( rdist==0 && type==cerf ) dfunc=-(2.0/sqrt(2*pi))*invr0*exp(-0.5*rdist*rdist); 
+     if( rdist==0 && type==triangular ) dfunc=2*(rdist - 1)*invr0;
   }else{
     if(type==smap){
       double sx=c*pow( rdist, a ); 
@@ -288,6 +312,9 @@ double SwitchingFunction::calculate(double distance,double&dfunc)const{
     }else if(type==gaussian){
       result=exp(-0.5*rdist*rdist);
       dfunc=-rdist*result;
+    }else if(type==cerf){
+      result = 1. - erf( rdist / sqrt(2) ); 
+      dfunc = -(2.0/sqrt(2*pi))*exp(-0.5*rdist*rdist); 
     }else if(type==cubic){
       double tmp1=rdist-1, tmp2=(1+2*rdist);
       result=tmp1*tmp1*tmp2;
@@ -296,6 +323,11 @@ double SwitchingFunction::calculate(double distance,double&dfunc)const{
       double tmp1=std::tanh(rdist);
       result = 1.0 - tmp1;
       dfunc=-(1-tmp1*tmp1);
+    }else if(type==triangular){
+      result = rdist*( rdist - 2 ) + 1;
+      // if( rdist<1 ) 
+      dfunc=2*(rdist - 1); 
+      // if( rdist<1 ) dfunc=rdist - 1.0/invr0; // (2*rdist - 2 );
     }else plumed_merror("Unknown switching function type");
 // this is for the chain rule:
     dfunc*=invr0;

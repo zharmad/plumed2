@@ -19,7 +19,6 @@
    You should have received a copy of the GNU Lesser General Public License
    along with plumed.  If not, see <http://www.gnu.org/licenses/>.
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++ */
-#include "tools/HistogramBead.h"
 #include "VesselRegister.h"
 #include "ShortcutVessel.h"
 
@@ -37,7 +36,8 @@ PLUMED_REGISTER_VESSEL(Histogram,"HISTOGRAM")
 
 void Histogram::registerKeywords( Keywords& keys ){
   ShortcutVessel::registerKeywords( keys );
-  HistogramBead::registerKeywords( keys );
+  keys.add("compulsory","LOWER","the lower boundary on the range of interest");
+  keys.add("compulsory","UPPER","the upper boundary on the range of interest");
   keys.add("compulsory","NBINS","The number of equal width bins you want to divide the range into");
   keys.addFlag("NORM",false,"calculate the fraction of values rather than the number"); 
 }
@@ -52,8 +52,20 @@ ShortcutVessel(da)
 {
   bool norm; parseFlag("NORM",norm); std::string normstr="";
   if(norm) normstr=" NORM";
-  std::vector<std::string> bins; HistogramBead::generateBins( getAllInput(), bins );
-  for(unsigned i=0;i<bins.size();++i) addVessel("BETWEEN",bins[i] + normstr);
+//  std::vector<std::string> bins; HistogramBead::generateBins( getAllInput(), bins );
+
+  unsigned nbins; parse("NBINS",nbins);
+  double min; parse("LOWER",min);
+  double max; parse("UPPER",max);  
+
+  double delr = ( max-min ) / static_cast<double>( nbins );
+  for(unsigned i=0;i<nbins;++i){
+      std::string lb, ub, bind;
+      Tools::convert( min+i*delr, lb );
+      Tools::convert( min+(i+1)*delr, ub );
+      bind = getAllInput() + " " + "LOWER=" + lb + " " + "UPPER=" + ub + normstr;
+      addVessel("BETWEEN",bind);
+  }
 }
 
 }

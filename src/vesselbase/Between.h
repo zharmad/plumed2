@@ -23,14 +23,15 @@
 #define __PLUMED_vesselbase_Between_h
 
 #include "FunctionVessel.h"
-#include "tools/HistogramBead.h"
+#include "tools/NewHistogramBead.h"
 
 namespace PLMD {
 namespace vesselbase {
 
 class Between : public FunctionVessel {
 private:
-  HistogramBead hist;
+  double min, max;
+  NewHistogramBead hist;
 public:
   static void registerKeywords( Keywords& keys );
   static void reserveKeyword( Keywords& keys );

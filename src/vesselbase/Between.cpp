@@ -30,8 +30,10 @@ PLUMED_REGISTER_VESSEL(Between,"BETWEEN")
 
 void Between::registerKeywords( Keywords& keys ){
   FunctionVessel::registerKeywords( keys );
-  HistogramBead::registerKeywords( keys );
   keys.addFlag("NORM",false,"calculate the fraction of values rather than the number");
+  keys.add("compulsory","LOWER","the lower boundary on the range of interest");
+  keys.add("compulsory","UPPER","the upper boundary on the range of interest");
+  NewHistogramBead::registerKeywords( keys );
 }
 
 void Between::reserveKeyword( Keywords& keys ){
@@ -55,6 +57,7 @@ FunctionVessel(da)
   }
 
   parseFlag("NORM",norm); std::string errormsg; 
+  parse("LOWER",min); parse("UPPER",max);
 
   hist.set( getAllInput(),errormsg );
   if( !isPeriodic ) hist.isNotPeriodic();
@@ -68,11 +71,11 @@ std::string Between::value_descriptor(){
 }
 
 double Between::calcTransform( const double& val, double& dv ) const {
-  double f = hist.calculate(val, dv); return f; 
+  double f = hist.setBoundsAndCalculate( min, max, val, dv); return f; 
 }
 
 double Between::getCutoff(){
-  return std::numeric_limits<double>::max();
+  return max + hist.getDMax();
 } 
 
 }

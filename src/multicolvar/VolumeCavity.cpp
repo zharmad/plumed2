@@ -112,7 +112,7 @@ private:
   OFile boxfile;
   double lenunit;
   double jacob_det;
-  double len_bi, len_cross, len_perp, sigma;
+  double len_bi, len_cross, len_perp;
   Vector origin, bi, cross, perp;
   std::vector<Vector> dlbi, dlcross, dlperp;
   std::vector<Tensor> dbi, dcross, dperp;
@@ -184,8 +184,6 @@ void VolumeCavity::setupRegions(){
   // Make some space for things
   Vector d1, d2, d3;
   
-  // Retrieve the sigma value
-  sigma=getSigma();
   // Set the position of the origin
   origin=getPosition(0);
 
@@ -356,33 +354,27 @@ void VolumeCavity::update(){
 }
 
 double VolumeCavity::calculateNumberInside( const Vector& cpos, Vector& derivatives, Tensor& vir, std::vector<Vector>& rderiv ) const {
-  // Setup the histogram bead
-  HistogramBead bead; bead.isNotPeriodic(); bead.setKernelType( getKernelType() );
-
   // Calculate distance of atom from origin of new coordinate frame
   Vector datom=pbcDistance( origin, cpos );
   double ucontr, uder, vcontr, vder, wcontr, wder;
 
   // Calculate contribution from integral along bi
-  bead.set( 0, len_bi, sigma );
   double upos=dotProduct( datom, bi );
-  ucontr=bead.calculate( upos, uder );
-  double udlen=bead.uboundDerivative( upos ); 
-  double uder2 = bead.lboundDerivative( upos ) - udlen; 
+  ucontr=getBead().setBoundsAndCalculate( 0, len_bi, upos, uder );
+  double udlen=getBead().boundDerivative( len_bi, upos ); 
+  double uder2 = getBead().boundDerivative( 0, upos ) - udlen; 
 
   // Calculate contribution from integral along cross
-  bead.set( 0, len_cross, sigma );
   double vpos=dotProduct( datom, cross );
-  vcontr=bead.calculate( vpos, vder );
-  double vdlen=bead.uboundDerivative( vpos );
-  double vder2 = bead.lboundDerivative( vpos ) - vdlen;
+  vcontr=getBead().setBoundsAndCalculate( 0, len_cross, vpos, vder );
+  double vdlen=getBead().boundDerivative( len_cross, vpos );
+  double vder2 = getBead().boundDerivative( 0, vpos ) - vdlen;
 
   // Calculate contribution from integral along perp
-  bead.set( 0, len_perp, sigma );
   double wpos=dotProduct( datom, perp );
-  wcontr=bead.calculate( wpos, wder );
-  double wdlen=bead.uboundDerivative( wpos );
-  double wder2 = bead.lboundDerivative( wpos ) - wdlen;
+  wcontr=getBead().setBoundsAndCalculate( 0, len_perp, wpos, wder );
+  double wdlen=getBead().boundDerivative( len_perp, wpos );
+  double wder2 = getBead().boundDerivative( 0, wpos ) - wdlen;
 
   Vector dfd; dfd[0]=uder*vcontr*wcontr; dfd[1]=ucontr*vder*wcontr; dfd[2]=ucontr*vcontr*wder;
   derivatives[0] = (dfd[0]*bi[0]+dfd[1]*cross[0]+dfd[2]*perp[0]);

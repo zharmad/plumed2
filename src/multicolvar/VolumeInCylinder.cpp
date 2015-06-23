@@ -64,7 +64,7 @@ class VolumeInCylinder : public ActionVolume {
 private:
   bool docylinder;
   Vector origin;
-  HistogramBead bead;
+  double min, max;
   std::vector<unsigned> dir; 
   SwitchingFunction switchingFunction;
 public:
@@ -83,7 +83,7 @@ void VolumeInCylinder::registerKeywords( Keywords& keys ){
   keys.add("compulsory","RADIUS","a switching function that gives the extent of the cyclinder in the plane perpendicular to the direction");
   keys.add("compulsory","LOWER","0.0","the lower boundary on the direction parallel to the long axis of the cylinder");
   keys.add("compulsory","UPPER","0.0","the upper boundary on the direction parallel to the long axis of the cylinder");
-  keys.reset_style("SIGMA","optional");
+  keys.reset_style("SWITCH","optional");
 }
 
 VolumeInCylinder::VolumeInCylinder(const ActionOptions& ao):
@@ -109,12 +109,11 @@ docylinder(false)
   if( errors.length()!=0 ) error("problem reading RADIUS keyword : " + errors );
   log.printf("  radius of cylinder is given by %s \n", ( switchingFunction.description() ).c_str() );
 
-  double min, max; parse("LOWER",min); parse("UPPER",max);
+  parse("LOWER",min); parse("UPPER",max);
   if( min!=0.0 ||  max!=0.0 ){
      if( min>max ) error("minimum of cylinder should be less than maximum");
      docylinder=true;
      log.printf("  cylinder extends from %f to %f along the %s axis\n",min,max,sdir.c_str() );
-     bead.isNotPeriodic(); bead.setKernelType( getKernelType() ); bead.set( min, max, getSigma() );
   }
 
   checkRead(); requestAtoms(atom); 
@@ -128,7 +127,7 @@ double VolumeInCylinder::calculateNumberInside( const Vector& cpos, Vector& deri
    
   double vcylinder, dcylinder;
   if( docylinder ){
-      vcylinder=bead.calculate( fpos[dir[2]], dcylinder );
+      vcylinder=getBead().setBoundsAndCalculate( min, max, fpos[dir[2]], dcylinder );
   } else {
       vcylinder=1.0; dcylinder=0.0;
   }

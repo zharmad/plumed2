@@ -22,7 +22,7 @@
 #ifndef __PLUMED_multicolvar_ActionVolume_h
 #define __PLUMED_multicolvar_ActionVolume_h
 
-#include "tools/HistogramBead.h"
+#include "tools/NewHistogramBead.h"
 #include "VolumeGradientBase.h"
 
 namespace PLMD {
@@ -39,15 +39,12 @@ class ActionVolume : public VolumeGradientBase {
 private:
 /// Number of quantities in use in this colvar
   unsigned nquantities;
-/// The value of sigma
-  double sigma;
 /// Are we interested in the area outside the colvar
   bool not_in;
-/// The kernel type for this histogram
-  std::string kerneltype;
+/// The bead used to determine whether or not we are in the region of interest
+  NewHistogramBead bead;
 protected:
-  double getSigma() const ;
-  std::string getKernelType() const ;
+  NewHistogramBead getBead() const ;
 public:
   static void registerKeywords( Keywords& keys );
   ActionVolume(const ActionOptions&);
@@ -68,13 +65,8 @@ unsigned ActionVolume::getNumberOfQuantities(){
 } 
 
 inline
-double ActionVolume::getSigma() const {
-  return sigma;
-}
-
-inline
-std::string ActionVolume::getKernelType() const {
-  return kerneltype;
+NewHistogramBead ActionVolume::getBead() const {
+  return bead;
 }
 
 inline

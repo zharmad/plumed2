@@ -117,27 +117,21 @@ ActionVolume(ao)
 void VolumeAround::setupRegions(){ }
 
 double VolumeAround::calculateNumberInside( const Vector& cpos, Vector& derivatives, Tensor& vir, std::vector<Vector>& refders ) const {
-  // Setup the histogram bead
-  HistogramBead bead; bead.isNotPeriodic(); bead.setKernelType( getKernelType() );
-
   // Calculate position of atom wrt to origin
   Vector fpos=pbcDistance( getPosition(0), cpos );
   double xcontr, ycontr, zcontr, xder, yder, zder; 
   if( dox ){
-     bead.set( xlow, xhigh, getSigma() );
-     xcontr=bead.calculate( fpos[0], xder ); 
+     xcontr=getBead().setBoundsAndCalculate( xlow, xhigh, fpos[0], xder ); 
   } else {
      xcontr=1.; xder=0.;
   }
   if( doy ){
-     bead.set( ylow, yhigh, getSigma() );
-     ycontr=bead.calculate( fpos[1], yder );
+     ycontr=getBead().setBoundsAndCalculate( ylow, yhigh, fpos[1], yder );
   } else {
      ycontr=1.; yder=0.;
   }
   if( doz ){
-     bead.set( zlow, zhigh, getSigma() );
-     zcontr=bead.calculate( fpos[2], zder );
+     zcontr=getBead().setBoundsAndCalculate( zlow, zhigh, fpos[2], zder );
   } else {
      zcontr=1.; zder=0.;
   }
