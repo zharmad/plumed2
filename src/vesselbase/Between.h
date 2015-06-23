@@ -30,7 +30,7 @@ namespace vesselbase {
 
 class Between : public FunctionVessel {
 private:
-  double min, max;
+  double low, high;
   NewHistogramBead hist;
 public:
   static void registerKeywords( Keywords& keys );

@@ -57,25 +57,26 @@ FunctionVessel(da)
   }
 
   parseFlag("NORM",norm); std::string errormsg; 
-  parse("LOWER",min); parse("UPPER",max);
+  parse("LOWER",low); parse("UPPER",high);
 
-  hist.set( getAllInput(),errormsg );
+  hist.set( getAllInput(), errormsg );
   if( !isPeriodic ) hist.isNotPeriodic();
   else hist.isPeriodic( min, max ); 
   if( errormsg.size()!=0 ) error( errormsg );
 }
 
 std::string Between::value_descriptor(){
-  if(norm) return "the fraction of values " + hist.description();
-  return "the number of values " + hist.description();
+  std::string lowb, highb; Tools::convert(low,lowb); Tools::convert(high,highb);
+  if(norm) return "the fraction of values between " + lowb + " and " + highb + hist.description();
+  return "the number of values between " + lowb + " and " + highb + hist.description();
 }
 
 double Between::calcTransform( const double& val, double& dv ) const {
-  double f = hist.setBoundsAndCalculate( min, max, val, dv); return f; 
+  double f = hist.setBoundsAndCalculate( low, high, val, dv); return f;
 }
 
 double Between::getCutoff(){
-  return max + hist.getDMax();
+  return high + hist.getDMax();
 } 
 
 }

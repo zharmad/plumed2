@@ -99,7 +99,7 @@ inv_max_minus_min(0.0)
 }
 
 std::string NewHistogramBead::description() const {
-  return sf.description();
+  return "Size of switching region equals " + sf.description();
 }
 
 void NewHistogramBead::set( const std::string& params, std::string& errormsg ){
@@ -141,7 +141,7 @@ double NewHistogramBead::boundDerivative( const double& highb, const double& x )
   double df2, f2, diff2 = difference( x, highb );
   if( diff2>0 ) f2 = 1. - sf.calculate( diff2, df2 );
   else f2 = -(1. - sf.calculate( fabs(diff2), df2 ));
-  return df2*fabs(diff2); 
+  return df2*fabs(diff2) / 2.0; 
 }
 
 }

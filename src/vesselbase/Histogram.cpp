@@ -52,18 +52,18 @@ ShortcutVessel(da)
 {
   bool norm; parseFlag("NORM",norm); std::string normstr="";
   if(norm) normstr=" NORM";
-//  std::vector<std::string> bins; HistogramBead::generateBins( getAllInput(), bins );
 
   unsigned nbins; parse("NBINS",nbins);
   double min; parse("LOWER",min);
   double max; parse("UPPER",max);  
 
+  std::string instr = getAllInput();
   double delr = ( max-min ) / static_cast<double>( nbins );
   for(unsigned i=0;i<nbins;++i){
       std::string lb, ub, bind;
       Tools::convert( min+i*delr, lb );
       Tools::convert( min+(i+1)*delr, ub );
-      bind = getAllInput() + " " + "LOWER=" + lb + " " + "UPPER=" + ub + normstr;
+      bind = instr + " " + "LOWER=" + lb + " " + "UPPER=" + ub + normstr;
       addVessel("BETWEEN",bind);
   }
 }
