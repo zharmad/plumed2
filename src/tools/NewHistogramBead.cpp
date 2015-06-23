@@ -141,7 +141,7 @@ double NewHistogramBead::boundDerivative( const double& highb, const double& x )
   double df2, f2, diff2 = difference( x, highb );
   if( diff2>0 ) f2 = 1. - sf.calculate( diff2, df2 );
   else f2 = -(1. - sf.calculate( fabs(diff2), df2 ));
-  return df2*fabs(diff2) / 2.0; 
+  return -df2*fabs(diff2) / 2.0; 
 }
 
 }
