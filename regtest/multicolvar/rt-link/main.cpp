@@ -1,3 +1,4 @@
+#include "mpi.h"
 #include "plumed/tools/Vector.h"
 #include "plumed/tools/LinkCells.h"
 #include "plumed/tools/Pbc.h"
