@@ -176,7 +176,7 @@ void Value::applyPeriodicity(){
 inline
 void product( const Value& val1, const Value& val2, Value& valout ){
   plumed_assert( val1.derivatives.size()==val2.derivatives.size() );
-  if( valout.derivatives.size()!=val1.derivatives.size() ) valout.derivatives.resize( val1.derivatives.size() );
+  if( valout.derivatives.size()!=val1.derivatives.size() ) valout.resizeDerivatives( val1.derivatives.size() );
   valout.value_set=false; 
   std::fill(valout.derivatives.begin(), valout.derivatives.end(), 0);
   double u, v; u=val1.value; v=val2.value;
@@ -189,7 +189,7 @@ void product( const Value& val1, const Value& val2, Value& valout ){
 inline
 void quotient( const Value& val1, const Value& val2, Value* valout ){
   plumed_assert( val1.derivatives.size()==val2.derivatives.size() );
-  if( valout->derivatives.size()!=val1.derivatives.size() ) valout->derivatives.resize( val1.derivatives.size() );
+  if( valout->derivatives.size()!=val1.derivatives.size() ) valout->resizeDerivatives( val1.derivatives.size() );
   valout->value_set=false; 
   std::fill(valout->derivatives.begin(), valout->derivatives.end(), 0);
   double u, v; u=val1.get(); v=val2.get();
