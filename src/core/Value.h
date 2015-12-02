@@ -29,6 +29,7 @@
 #include "tools/Tools.h"
 #include "tools/AtomNumber.h"
 #include "tools/Vector.h"
+#include "tools/DynamicList.h"
 
 namespace PLMD{
 
@@ -67,6 +68,7 @@ private:
 /// A flag telling us we have a force acting on this quantity
   bool hasForce;
 /// The derivatives of the quantity stored in value
+  DynamicList<unsigned> active_der;
   std::vector<double> derivatives;
   std::map<AtomNumber,Vector> gradients;
 /// The name of this quantiy
@@ -82,6 +84,9 @@ private:
   double inv_max_minus_min;
 /// Complete the setup of the periodicity
   void setupPeriodicity();
+/// Is this quantity an ensemble average 
+  enum {averaged,notaveraged} ensemble;
+  unsigned nrep;
 // bring value within PBCs
   void applyPeriodicity();
 public:
@@ -121,6 +126,8 @@ public:
   void addDerivative(unsigned i,double d);
 /// Set the value of the ith component of the derivatives array
   void setDerivative(unsigned i, double d);
+/// updates the dynamic list of active derivatives
+  void updateActiveDerivatives();
 /// Apply the chain rule to the derivatives
   void chainRule(double df);
 /// Get the derivative with respect to component n
@@ -144,6 +151,14 @@ public:
 /// This sets up the gradients
   void setGradients();
   static double projection(const Value&,const Value&);
+/// Check if the value is an ensemble average 
+  bool isEnsemble() const;
+/// Set the function is not an ensemble average 
+  void setNotEnsemble();
+/// Set the function is an ensemble average 
+  void setEnsemble(unsigned n);
+/// Get the number of replicas of the ensemble averaging 
+  unsigned getEnsemble() const;
 };
 
 void copy( const Value& val1, Value& val2 );
@@ -162,7 +177,8 @@ inline
 void product( const Value& val1, const Value& val2, Value& valout ){
   plumed_assert( val1.derivatives.size()==val2.derivatives.size() );
   if( valout.derivatives.size()!=val1.derivatives.size() ) valout.derivatives.resize( val1.derivatives.size() );
-  valout.value_set=false; valout.derivatives.assign(valout.derivatives.size(),0.0);
+  valout.value_set=false; 
+  std::fill(valout.derivatives.begin(), valout.derivatives.end(), 0);
   double u, v; u=val1.value; v=val2.value;
   for(unsigned i=0;i<val1.derivatives.size();++i){
      valout.addDerivative(i, u*val2.derivatives[i] + v*val1.derivatives[i] );
@@ -174,7 +190,8 @@ inline
 void quotient( const Value& val1, const Value& val2, Value* valout ){
   plumed_assert( val1.derivatives.size()==val2.derivatives.size() );
   if( valout->derivatives.size()!=val1.derivatives.size() ) valout->derivatives.resize( val1.derivatives.size() );
-  valout->value_set=false; valout->derivatives.assign(valout->derivatives.size(),0.0);
+  valout->value_set=false; 
+  std::fill(valout->derivatives.begin(), valout->derivatives.end(), 0);
   double u, v; u=val1.get(); v=val2.get();
   for(unsigned i=0;i<val1.getNumberOfDerivatives();++i){
      valout->addDerivative(i, v*val1.getDerivative(i) - u*val2.getDerivative(i) );
@@ -231,18 +248,33 @@ bool Value::hasDerivatives() const {
 inline
 void Value::resizeDerivatives(int n){
   derivatives.resize(n);
+  active_der.clear();
+  for(unsigned i=0; i<n; ++i) active_der.addIndexToList(i);
 }
 
 inline
 void Value::addDerivative(unsigned i,double d){
   plumed_dbg_massert(i<derivatives.size(),"derivative is out of bounds");
   derivatives[i]+=d;
+  if(!active_der.isActive(i)) {
+    active_der.activate(i); 
+    active_der.setUpdate(true);
+  }
 }
 
 inline
 void Value::setDerivative(unsigned i, double d){
   plumed_dbg_massert(i<derivatives.size(),"derivative is out of bounds");
   derivatives[i]=d;
+  if(!active_der.isActive(i)) {
+    active_der.activate(i); 
+    active_der.setUpdate(true);
+  }
+}
+
+inline
+void Value::updateActiveDerivatives(){
+  if(active_der.needsUpdate()) active_der.updateActiveMembers();
 }
 
 inline
@@ -259,7 +291,15 @@ void Value::clearInputForce(){
 inline
 void Value::clearDerivatives(){
   value_set=false;
-  std::fill(derivatives.begin(), derivatives.end(), 0);
+  unsigned num=active_der.getNumberActive();
+  if(num==derivatives.size()) std::fill(derivatives.begin(), derivatives.end(), 0);
+  else {
+    for(unsigned i=0;i<num;++i){
+      unsigned ider=active_der[i];
+      derivatives[ider]=0;
+    }
+  }
+  //active_der.deactivateAll();
 }
 
 inline

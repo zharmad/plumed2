@@ -151,9 +151,11 @@ private:
   unsigned rank;
 /// These are flags that are used internally to ensure that dynamic lists are being used properly
   bool allWereActivated, allWereDeactivated;
+/// This flag can be used to determine from outside whether or not to update a list
+  bool update;
 public:
 /// Constructor
-  DynamicList():nactive(0),nprocessors(1),rank(0),allWereActivated(false),allWereDeactivated(false) {}
+  DynamicList():nactive(0),nprocessors(1),rank(0),allWereActivated(false),allWereDeactivated(false),update(true) {}
 /// An operator that returns the element from the current active list
   inline T operator [] (const unsigned& i) const { 
      plumed_dbg_assert( i<nactive );
@@ -201,6 +203,10 @@ public:
   void completeUpdate();
 /// This tells one if an update has been completed
   bool updateComplete() const ;
+/// This sets update
+  void setUpdate(const bool input);
+/// This gets update
+  bool needsUpdate();
 /// This sorts the elements in the active list
   void sortActiveList();
 /// Retriee the list of active objects
@@ -312,7 +318,8 @@ void DynamicList<T>::updateActiveMembers(){
   for(unsigned i=0;i<all.size();++i){
       if( onoff[i]>0 && onoff[i]%nprocessors==0 ){ active[kk]=i; kk++; }
   }
-  nactive=kk; 
+  nactive=kk;
+  update=false; 
 }
 
 template <typename T>
@@ -345,6 +352,16 @@ template <typename T>
 bool DynamicList<T>::updateComplete() const {
   if( !allWereActivated && !allWereDeactivated ) return true;
   return false;
+}
+
+template <typename T>
+void DynamicList<T>::setUpdate(const bool input) {
+  update = input;
+}
+
+template <typename T>
+bool DynamicList<T>::needsUpdate() {
+  return update;
 }
 
 template <typename U>

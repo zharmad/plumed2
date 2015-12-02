@@ -649,6 +649,7 @@ void PlumedMain::justCalculate(){
     if((*p)->isActive()){
       if((*p)->checkNumericalDerivatives()) (*p)->calculateNumericalDerivatives();
       else (*p)->calculate();
+      if(av) av->updateActiveDerivatives();
       // This retrieves components called bias 
       if(av) bias+=av->getOutputQuantity("bias");
       if(av) work+=av->getOutputQuantity("work");

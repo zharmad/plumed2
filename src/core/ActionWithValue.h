@@ -86,6 +86,10 @@ public:
   void setNotPeriodic();
 /// Set the value to be periodic with a particular domain
   void setPeriodic( const std::string& min, const std::string& max );
+/// Set your default value to have no ensemble averaging 
+  void setNotEnsemble();
+/// Set the value to be an ensemble average over n replicas 
+  void setEnsemble( const unsigned n );
 protected:
 /// Get a pointer to the default value
   Value* getPntrToValue();
@@ -103,6 +107,10 @@ public:
   void componentIsNotPeriodic( const std::string& name );
 /// Set the value to be periodic with a particular domain
   void componentIsPeriodic( const std::string& name, const std::string& min, const std::string& max );
+/// Set your value component to have no ensemble averaging 
+  void componentIsNotEnsemble( const std::string& name );
+/// Set your value component to have ensemble averaging over n replicas
+  void componentIsEnsemble( const std::string& name, const unsigned n );
 protected:
 /// Return a pointer to the component by index
   Value* getPntrToComponent(int i);
@@ -152,6 +160,8 @@ public:
   int getNumberOfComponents() const ;
 /// Clear the forces on the values
   void clearInputForces();
+/// Update the dynamic list of active derivatives
+  void updateActiveDerivatives();
 /// Clear the derivatives of values wrt parameters
   virtual void clearDerivatives();
 /// Calculate the gradients and store them for all the values (need for projections) 

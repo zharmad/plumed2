@@ -67,6 +67,11 @@ ActionWithValue::~ActionWithValue(){
 void ActionWithValue::clearInputForces(){
   for(unsigned i=0;i<values.size();i++) values[i]->clearInputForce();
 }
+
+void ActionWithValue::updateActiveDerivatives(){
+  for(unsigned i=0;i<values.size();i++) values[i]->updateActiveDerivatives();
+} 
+
 void ActionWithValue::clearDerivatives(){
   for(unsigned i=0;i<values.size();i++) values[i]->clearDerivatives();
 } 
@@ -116,6 +121,18 @@ void ActionWithValue::setPeriodic( const std::string& min, const std::string& ma
   plumed_massert(values.size()==1,"The number of components is not equal to one");
   plumed_massert(values[0]->name==getLabel(), "The value you are trying to set is not the default");
   values[0]->setDomain( min, max );
+}
+
+void ActionWithValue::setNotEnsemble(){
+  plumed_massert(values.size()==1,"The number of components is not equal to one");
+  plumed_massert(values[0]->name==getLabel(), "The value you are trying to set is not the default");
+  values[0]->setNotEnsemble();
+}
+
+void ActionWithValue::setEnsemble( const unsigned n ){
+  plumed_massert(values.size()==1,"The number of components is not equal to one");
+  plumed_massert(values[0]->name==getLabel(), "The value you are trying to set is not the default");
+  values[0]->setEnsemble( n );
 }
 
 Value* ActionWithValue::getPntrToValue(){
@@ -192,15 +209,25 @@ void ActionWithValue::componentIsNotPeriodic( const std::string& name ){
   values[kk]->setupPeriodicity();
 }
 
+void ActionWithValue::componentIsPeriodic( const std::string& name, const std::string& min, const std::string& max ){
+  int kk=getComponent(name);
+  values[kk]->setDomain(min,max);
+}
+
+void ActionWithValue::componentIsNotEnsemble( const std::string& name ){
+  int kk=getComponent(name);
+  values[kk]->setNotEnsemble();
+}
+
+void ActionWithValue::componentIsEnsemble( const std::string& name, const unsigned n ){
+  int kk=getComponent(name);
+  values[kk]->setEnsemble( n );
+}
+
 void ActionWithValue::setGradientsIfNeeded(){
   if(isOptionOn("GRADIENTS")) {
      for(unsigned i=0;i<values.size();i++) values[i]->setGradients();
   }
-}
-
-void ActionWithValue::componentIsPeriodic( const std::string& name, const std::string& min, const std::string& max ){
-  int kk=getComponent(name);
-  values[kk]->setDomain(min,max);
 }
 
 void ActionWithValue::turnOnDerivatives(){
