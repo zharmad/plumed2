@@ -1,0 +1,1 @@
+../../../plumed-src/src/colvar/Quaternion.cpp
