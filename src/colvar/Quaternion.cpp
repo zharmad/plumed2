@@ -70,25 +70,32 @@ class Quaternion : public Colvar {
     //ReferenceValuePack mypack1; //Object to carry derivatives from calculations to system.
     //ReferenceValuePack mypack2;
     PLMD::RMSDBase* rmsd1;
-    PLMD::RMSDBase* rmsd2;
     std::vector<Vector> refpos1;
-    std::vector<Vector> refpos2;
     std::vector<double> refw1;
-    std::vector<double> refw2;
     std::vector<double> refdisp1;
-    std::vector<double> refdisp2;
     Vector refc1;
     bool bRefc1_is_calculated;
     bool bRef1_is_centered;
+    Matrix<double> S01;
+    Vector4d quat1;
+    double lambda01;
+    
+    PLMD::RMSDBase* rmsd2;
+    std::vector<Vector> refpos2;
+    std::vector<double> refw2;
+    std::vector<double> refdisp2;
     Vector refc2;
     bool bRefc2_is_calculated;
     bool bRef2_is_centered;
+    Matrix<double> S12;
+    Vector4d quat2;
+    double lambda12;
     
     // Relevant variables for outputs and derivatives.
     double dist;
     double lambda;
     Vector4d quat;
-    Vector4d normquat;
+    Vector4d normquat; //Direction of normalisation.
     std::vector<double> nqdummy;
     //std::vector<double> eigenvals;
     //Matrix<double> eigenvecs;
@@ -113,6 +120,14 @@ public:
 // active methods:
   //Because I don't have the time to fuck around with parseVector from Bias.
   void stringToQuat(const string str, std::vector<double> q, const char *fs);
+  
+  std::vector<Vector> rotateCoordinates(const Vector4d q, const std::vector<Vector> pos);
+  
+  void alignDomain(const unsigned nvals,
+        const std::vector<Vector> ref, const std::vector<double> w,
+        const std::vector<Vector> loc, const unsigned offset,
+        Matrix<double> S, std::vector<double> eigenvals, Matrix<double> eigenvecs);
+  
   void optimalAlignment1(const std::vector<Vector> & currpos);
   virtual void calculate();
   static void registerKeywords(Keywords& keys);
@@ -169,6 +184,7 @@ nqdummy(4,0.0)
     
     string reffile1;
     string reffile2;
+
     parse("REFERENCE",reffile1);
     parse("REFERENCE_B", reffile2);
     string type;
@@ -228,25 +244,59 @@ nqdummy(4,0.0)
     if ( !reffile2.empty() ) {
         fprintf (stderr, "= = = Debug: REFERENCE_B found, parsing second pdb file...\n");          
         if( !pdb1.read(reffile2,plumed.getAtoms().usingNaturalUnits(),0.1/atoms.getUnits().getLength()) )
-        error("missing input file " + reffile2 );
+            error("missing input file " + reffile2 );
   
         //Store reference positions with zeroed barycenters.
         setReference2( pdb2 );
         fprintf (stderr, "= = = = Debug: read and parse finished ...\n");  
     }
   
+    // The colvar module takes in only 1 set of atoms.
+    // Therefore, will need additional code to handle relative orientation from two diomains.
     fprintf (stderr, "= = = Debug: Requesting atoms for tracking...\n");
-    std::vector<AtomNumber> atoms;
-    rmsd1 = metricRegister().create<RMSDBase>(type,pdb1);
-    rmsd1->getAtomRequests( atoms );
-    requestAtoms( atoms );
+    if (!bRefc2_is_calculated) {
+        // Simple case of 1 reference, absolute quaternion.
+        std::vector<AtomNumber> atoms;
+        
+        rmsd1 = metricRegister().create<RMSDBase>(type,pdb1);
+        rmsd1->getAtomRequests( atoms );
+        fprintf(stderr,"= = = = Debug: First 3 entries of pdb1 atoms: %i %i %i\n",
+                atoms[0], atoms[1], atoms[2]);
+        
+        requestAtoms( atoms );
+        log.printf("  reference from file %s\n",reffile1.c_str());
+        log.printf("  which contains %d atoms\n",getNumberOfAtoms());
+    } else {
+    //if (bRefc2_is_calculated) {        
+        // 2 Reference files, relative quaternions.
+        std::vector<AtomNumber> atoms;
+        std::vector<AtomNumber> temp1;
+        std::vector<AtomNumber> temp2;
+
+        rmsd1 = metricRegister().create<RMSDBase>(type,pdb1);
+        rmsd1->getAtomRequests( temp1 );
+        rmsd2 = metricRegister().create<RMSDBase>(type,pdb2);
+        rmsd2->getAtomRequests( temp2 );
+        
+        fprintf(stderr,"= = = = Debug: First 3 entries of pdb1 atoms: %i %i %i\n",
+                temp1[0], temp1[1], temp1[2]);
+        fprintf(stderr,"= = = = Debug: First 3 entries of pdb2 atoms: %i %i %i\n",
+                temp2[0], temp2[1], temp2[2]);               
+        
+        atoms.reserve( temp1.size()+temp2.size() );
+        atoms.insert( atoms.end(), temp1.begin(), temp1.end());
+        atoms.insert( atoms.end(), temp2.begin(), temp2.end());
+
+        requestAtoms( atoms );
+        log.printf("  reference from files %s and %s\n",
+                reffile1.c_str(), reffile2.c_str());
+        log.printf("  which contains %d atoms\n",getNumberOfAtoms());    
+    }
     fprintf (stderr, "= = = = Debug: Request finished.\n");    
     // Setup the derivative pack
     //posder1.resize( 1, 3*atoms.size()+9 ); mypack1.resize( 0, atoms.size() );
     //for(unsigned i=0;i<atoms.size();++i) mypack1.setAtomIndex( i, i );
   
-    log.printf("  reference from file %s\n",reffile1.c_str());
-    log.printf("  which contains %d atoms\n",getNumberOfAtoms());
    
   /*if ( !reference2.empty() ) {
     if ( !pdb2.read(reference2,plumed.getAtoms().usingNaturalUnits(),0.1/atoms.getUnits().getLength()) )
@@ -314,39 +364,34 @@ void Quaternion::setReference2(const PDB inppdb ){
     setReference1( inppdb.getPositions(), inppdb.getOccupancy(), inppdb.getBeta() );
 }
 
-// Quaternion version of Optimal rotations. Copied from RMSD section to simplify
-// class issues that I haven't mastered yet.
-// Should return the quaternion
-// This first case deals with only one absolute quaternion calculation.
-void Quaternion::optimalAlignment1(const std::vector<Vector> & currpos)
+//Returns a copy of coordinates pos, rotated according to q.
+std::vector<Vector> Quaternion::rotateCoordinates(const Vector4d q, const std::vector<Vector> pos)
 {
-    /* General procedure to calculate the quaternion value is to provide first a best fit.
-    * Reference notation in NAMD, PLUMED, and Dill.
-    * NOTES: Copy over RMSDCoreData::doCoreCalc first, and then do relevant pruning.
-    * 1) Make the barycenters zero.
-    * 2) gather the second moment/correlation matrix C = sum_1^N X1 X2T - is curly R in Ken Dill (2004), eq. 5
-    * 3) Create the equivalent quaternion matrix/overlap matrix S  - is curly F, eq. 10
-    * 4) Diagonalise this 4x4 matrix, the maximum eigenvector is almost always
-    *    the best rotation, the first eigenvector by convention.
-    * 5) Can use for both RMSD and rotation matrices.
-    */
-    //fprintf (stderr, "= = Debug: Starting optimalAlignment1...\n");
-    
-    const unsigned nvals = refpos1.size();
-    //Make a copy of input vectors so as to center and modify them.
-    std::vector<Vector> locpos;
-    locpos = currpos;
-    
-    //double rr00=0.;
-    //double rr11=0.;
-    // This is positions*reference
-    //Tensor rr01;
+    std::vector<Vector> rot;
+    unsigned ntot = pos.size();
+    rot.resize(ntot,Vector(0,0,0));
+    for (unsigned i=0;i<ntot;i++)
+        rot[i]=quaternionRotate(q, pos[i]);
+    return rot;
+}
 
-    // (1)
-    //if (!bRef1_is_centered) { refc1 }
+// Generic quaternion calculator. Able to function on submatrixes 
+// Using formalism q being the rotation from local to reference frame.
+void Quaternion::alignDomain(const unsigned nvals,
+        const std::vector<Vector> ref, const std::vector<double> w,
+        const std::vector<Vector> loc, const unsigned offset,
+        Matrix<double> S, std::vector<double> l, Matrix<double> q)
+{
     Vector posc ; posc.zero();
-    for(unsigned i=0;i<nvals;i++) {posc+=refw1[i]*locpos[i];}
-    for(unsigned i=0;i<nvals;i++) {locpos[i]-=posc;}
+    unsigned ntot=nvals+offset;
+    if (ntot>loc.size())
+    {
+        std::string msg="ALIGNDOMAIN FAILED: OFFSET + NVALS EXCEEDS CURRENT POSITION SIZE";
+        plumed_merror(msg);
+    }
+
+    for(unsigned i=offset;i<ntot+;i++) {posc+=w[i]*loc[i];}
+    for(unsigned i=offset;i<ntot;i++) {loc[i]-=posc;}
     //fprintf (stderr, "= = = Debug: Current frame has been centered: %g %g %g\n",
     //                 posc[0], posc[1], posc[2]);
     // (2)
@@ -355,11 +400,12 @@ void Quaternion::optimalAlignment1(const std::vector<Vector> & currpos)
     //Vector cp; cp.zero(); //if(!cpositions_is_removed)cp=cpositions;
     //Vector cr; cr.zero(); //if(!creference_is_removed)cr=creference;
     rr00=0.0; rr11=0.0; rr01.zero();
+    unsigned iloc;
     for(unsigned iat=0;iat<nvals;iat++){
-      double w=refw1[iat];
-      rr00+=dotProduct(locpos[iat],locpos[iat])*w;
-      rr11+=dotProduct(refpos1[iat],refpos1[iat])*w;
-      rr01+=Tensor(locpos[iat],refpos1[iat])*w;
+        iloc=iat+offset;
+        rr00+=dotProduct(loc[iloc],loc[iloc])*w[iat];
+        rr11+=dotProduct(ref[iat],ref[iat])*w[iat];
+        rr01+=Tensor(loc[iloc],ref[iat])*w[iat];
     }
     // (3) 
     // the quaternion matrix: this is internal
@@ -385,11 +431,10 @@ void Quaternion::optimalAlignment1(const std::vector<Vector> & currpos)
     //    fprintf (stderr, "           [ %g %g %g %g ]\n", S[i][0], S[i][1], S[i][2], S[i][3]);
     
     // (4) Diagonalisation
-    std::vector<double> eigenvals;
-    Matrix<double> eigenvecs;
-
     //fprintf (stderr, "= = = Debug: Starting diagonalisation of matrix S...\n");
-    int diagerror=diagMat(S, eigenvals, eigenvecs);
+    
+    // l is the eigenvalues, q are the eigenvectors/quaternions.
+    int diagerror=diagMat(S, l, q);
     if (diagerror!=0){
         std::string sdiagerror;
         Tools::convert(diagerror,sdiagerror);
@@ -398,10 +443,7 @@ void Quaternion::optimalAlignment1(const std::vector<Vector> & currpos)
     } else {
         //fprintf(stderr, "= = = = Debug: diagMat() successful.\n");
     }
-    std::vector<double> l = eigenvals; //Make copy for ease of reading.
-    Matrix<double> q = eigenvecs; //Make copy for ease of reading.
-    // Retrieve Quaternion and lambdas here, with a first check for normalisation
-    // conditions
+    
     double dot;
     //Normalise each eigenvector in the direction closer to norm
     for (unsigned i=0;i<4;i++) {
@@ -414,9 +456,91 @@ void Quaternion::optimalAlignment1(const std::vector<Vector> & currpos)
             for (unsigned j=0;j<4;j++)
                 q[i][j]=-q[i][j];
     }
-    for (unsigned i=0;i<4;i++) quat[i]=q[0][i];
+}
+
+// Quaternion version of Optimal rotations. Copied from RMSD section to simplify
+// class issues that I haven't mastered yet.
+// Should return the quaternion
+// The first case deals with only one absolute quaternion calculation.
+// The second case deals with a relative quaternion calculation, between two groups.
+void Quaternion::optimalAlignment1(const std::vector<Vector> & currpos)
+{
+    /* General procedure to calculate the quaternion value is to provide first a best fit.
+    * Reference notation in NAMD, PLUMED, and Dill.
+    * NOTES: Copy over RMSDCoreData::doCoreCalc first, and then do relevant pruning.
+    * 1) Make the barycenters zero.
+    * 2) gather the second moment/correlation matrix C = sum_1^N X1 X2T - is curly R in Ken Dill (2004), eq. 5
+    * 3) Create the equivalent quaternion matrix/overlap matrix S  - is curly F, eq. 10
+    * 4) Diagonalise this 4x4 matrix, the maximum eigenvector is almost always
+    *    the best rotation, the first eigenvector by convention.
+    * 5) Can use for both RMSD and rotation matrices.
+    * 6) Finally calculate the atomic derivatives with respect to q
+    *      Sij = sum( x_k*xref_k ), so if i=j, dSdx_j = xref_j ....
+    */
+    //fprintf (stderr, "= = Debug: Starting optimalAlignment1...\n");
+
+    /* When a second reference is given:
+     * 0) Assume that two reference frames are in the same orientation (1,0,0,0).
+     * 1) rotate the second reference PDB according to q1,
+     * 2) calculate the quaternion value to this new frame. This is q1->2.
+     * 3) Then apply forces.
+     */
     
-    //setup ptr to components as a vector.
+    /* Pseudocode for this function */
+    /*
+    alignDomain1();
+    if (!bRefc2_is_calculated) {
+        setSQLto1();
+    } else {
+        rotateReference2();
+        alignDomain2();
+        set SQLto12();
+    }
+    reportQuaterniontoOutput();
+    calculateDerivatives(); That is...
+    for (unsigned i=0;i<4;i++)
+        for(unsigned j=0;j<getNumberOfAtoms();j++)
+            setAtomsDerivatives(qptr[i], j, dqi/dxj );
+    */
+
+    Matrix<double> S;   
+    Matrix<double> qmat;
+    std::vector<double> l;    
+    
+    std::vector<Vector> rotref1;
+    std::vector<Vector> rotref2;
+    
+    
+    //Align the first domain,
+    //cheat with fact that currpos is concatenated from domain 1 and domain 2.
+    alignDomain(refpos1.size(), refpos1, refw1, currpos, 0, S01, l, qmat);
+    lambda01 = l[0];
+    for (unsigned i=0;i<4;i++) quat1[i]=qmat[0][i];
+    
+    if (!bRefc2_is_calculated) {
+        S=S01;
+        quat=quat1;
+    } else {
+        //Rotate reference to match q1, then calculate q_12.
+        rotref2 = rotateCoordinates(quat1, refpos2);
+        
+        //cheat with fact that currpos is concatenated of domain 1 and domain 2.        
+        alignDomain(refpos2.size(), rotref2, refw2, currpos, refpos1.size(), S12, l, qmat);
+        
+        lambda12 = l[0];
+        // From q_12 we can obtain directly the rotation from reference q02,
+        // and q_21.
+        S=S12;
+        for (unsigned i=0;i<4;i++) quat[i]= qmat[0][i];
+        quat2 = quat*quaternionInvert(quat1);
+    }
+    //fprintf(stderr, "= = = = Debug: Printing eigenvalues and eigenvectors:\n");
+    //fprintf(stderr, "       lambda: [ %g %g %g %g ]\n", lambda1[0], lambda1[1], lambda1[2], lambda1[3]);
+    //for(unsigned i=0;i<4;i++)
+    //    fprintf(stderr, "       vec-%i: [ %g %g %g %g ]\n",
+    //                i, qmat1[i][0], qmat1[i][1], qmat1[i][2], qmat1[i][3]);
+    
+    //setup ptr to components as a vector, in order to manipulate outputs as a vector.
     Value* valuew=getPntrToComponent("w");
     Value* valuex=getPntrToComponent("x");
     Value* valuey=getPntrToComponent("y");
@@ -424,75 +548,152 @@ void Quaternion::optimalAlignment1(const std::vector<Vector> & currpos)
     std::vector<Value*> qptr;
     qptr.push_back(valuew); qptr.push_back(valuex);
     qptr.push_back(valuey); qptr.push_back(valuez);
-    
     //Assign q-values to the COLVAR component.
-    for (unsigned i=0;i<4;i++) qptr[i]->set(quat[i]);
-
-    //fprintf(stderr, "= = = = Debug: Printing eigenvalues and eigenvectors:\n");
-    //fprintf(stderr, "       lambda: [ %g %g %g %g ]\n", l[0], l[1], l[2], l[3]);
-    //for(unsigned i=0;i<4;i++)
-    //    fprintf(stderr, "       vec-%i: [ %g %g %g %g ]\n",
-    //                i, eigenvecs[i][0],eigenvecs[i][1],eigenvecs[i][2], eigenvecs[i][3]);
-    
-    //Basic form, which we will reverse in the main for loop:
-    //for (unsigned i=0;i<4;i++)
-    //    for(unsigned j=0;j<getNumberOfAtoms();j++)
-    //        setAtomsDerivatives(qptr[i], j, dqi/dxj );
-
-
-    // (6) Finally calculate the atomic derivatives with respect to q
-    // ... Since Sij = sum( x_k*xref_k ) if i=j, dx_j = xref_j ....
+    for (unsigned i=0;i<4;i++) qptr[i]->set(quat[i]);    
     
     // Matrix<double> dS=Matrix<double>(4,4,3);
     //Matrix<Vector> dSdx = Matrix<Vector>(4,4,3);
     std::vector<std::vector<Vector > > dSdx;
     dSdx.resize(4, std::vector<Vector>( 4 ));
     
-    //Calculate derivatives for atom j.
+    //Calculate derivatives for atom j
     //This is ported in from NAMD code.
     //fprintf(stderr, "= = = Debug: Now calculating dSij/dx & dq/dx over %i atoms.\n", nvals);
-    for (unsigned j=0;j<nvals;j++) {
-        double const rx = refpos1[j][0];
-        double const ry = refpos1[j][1];
-        double const rz = refpos1[j][2];
 
-        // dSijdx : derivative of the S matrix, w.r.t. atom x_j 
-        dSdx[0][0] = Vector(  rx,  ry,  rz);
-        dSdx[1][0] = Vector( 0.0,  rz, -ry);
-        dSdx[0][1] = dSdx[1][0];
-        dSdx[2][0] = Vector( -rz, 0.0,  rx);
-        dSdx[0][2] = dSdx[2][0];
-        dSdx[3][0] = Vector(  ry, -rx,  0.0);
-        dSdx[0][3] = dSdx[3][0];
-        dSdx[1][1] = Vector(  rx, -ry, -rz);
-        dSdx[2][1] = Vector(  ry,  rx,  0.0);
-        dSdx[1][2] = dSdx[2][1];
-        dSdx[3][1] = Vector(  rz,  0.0,  rx);
-        dSdx[1][3] = dSdx[3][1];
-        dSdx[2][2] = Vector(- rx,  ry, -rz);
-        dSdx[3][2] = Vector( 0.0,  rz,  ry);
-        dSdx[2][3] = dSdx[3][2];
-        dSdx[3][3] = Vector( -rx, -ry,  rz);
+    if (!bRefc2_is_calculated) {
+        //Calculate for group 1 versus reference.
+        for (unsigned j=0;j<refpos1.size();j++) {
+            if (refw1[j]==0) continue; //Only apply forces to weighted atoms in the RMSD calculation.
+            
+            double const rx = refpos1[j][0];
+            double const ry = refpos1[j][1];
+            double const rz = refpos1[j][2];
 
-        // dqi/dxj = Sum_i Sum_j q1i dSijdx q0j /(Norm) * qi...
-        Vector dqidxj;
-        for (unsigned i=0;i<4;i++) {
-            //Calculate and append the derivatives due to each q-component separately
-            dqidxj.zero();
-            for (unsigned a=0;a<4;a++) {
-                for (unsigned b=0;b<4;b++) {
-                    double fact=q[1][a]*q[0][b]/(l[0]-l[1])*q[1][i];
-                    fact+=q[2][a]*q[0][b]/(l[0]-l[2])*q[2][i];
-                    fact+=q[3][a]*q[0][b]/(l[0]-l[3])*q[3][i];
-                    dqidxj+= -1.0*fact*dSdx[a][b];
+            // dSijdx : derivative of the S matrix, w.r.t. atom x_j 
+            dSdx[0][0] = Vector(  rx,  ry,  rz);
+            dSdx[1][0] = Vector( 0.0,  rz, -ry);
+            dSdx[0][1] = dSdx[1][0];
+            dSdx[2][0] = Vector( -rz, 0.0,  rx);
+            dSdx[0][2] = dSdx[2][0];
+            dSdx[3][0] = Vector(  ry, -rx,  0.0);
+            dSdx[0][3] = dSdx[3][0];
+            dSdx[1][1] = Vector(  rx, -ry, -rz);
+            dSdx[2][1] = Vector(  ry,  rx,  0.0);
+            dSdx[1][2] = dSdx[2][1];
+            dSdx[3][1] = Vector(  rz,  0.0,  rx);
+            dSdx[1][3] = dSdx[3][1];
+            dSdx[2][2] = Vector(- rx,  ry, -rz);
+            dSdx[3][2] = Vector( 0.0,  rz,  ry);
+            dSdx[2][3] = dSdx[3][2];
+            dSdx[3][3] = Vector( -rx, -ry,  rz);
+
+            // dqi/dxj = Sum_i Sum_j q1i dSijdx q0j /(Norm) * qi...
+            Vector dqidxj;
+            for (unsigned i=0;i<4;i++) {
+                //Calculate and append the derivatives due to each q-component separately
+                dqidxj.zero();
+                for (unsigned a=0;a<4;a++) {
+                    for (unsigned b=0;b<4;b++) {
+                        double fact=qmat[1][a]*qmat[0][b]/(l[0]-l[1])*qmat[1][i];
+                              fact+=qmat[2][a]*qmat[0][b]/(l[0]-l[2])*qmat[2][i];
+                              fact+=qmat[3][a]*qmat[0][b]/(l[0]-l[3])*qmat[3][i];
+                        dqidxj+= -1.0*fact*dSdx[a][b];
+                    }
                 }
+                //
+                setAtomsDerivatives(qptr[i], j, dqidxj);
             }
-            //
-            setAtomsDerivatives(qptr[i], j, dqidxj);
+        }
+    } else {
+        //We have the matrix for q_12. Need to do the reverse, and using the rotated reference atoms as the base.
+        //Cheat with the concatenation again.
+        //Do group 1 first, then group 2.
+        for (unsigned j=0;j<rotref1.size();j++) {
+            if (refw1[j]==0) continue; //Only apply forces to weighted atoms in the RMSD calculation.
+            
+            double const rx = rotref1[j][0];
+            double const ry = rotref1[j][1];
+            double const rz = rotref1[j][2];
+
+            // dSijdx : derivative of the S matrix, w.r.t. atom x_j 
+            dSdx[0][0] = Vector(  rx,  ry,  rz);
+            dSdx[1][0] = Vector( 0.0,  rz, -ry);
+            dSdx[0][1] = dSdx[1][0];
+            dSdx[2][0] = Vector( -rz, 0.0,  rx);
+            dSdx[0][2] = dSdx[2][0];
+            dSdx[3][0] = Vector(  ry, -rx,  0.0);
+            dSdx[0][3] = dSdx[3][0];
+            dSdx[1][1] = Vector(  rx, -ry, -rz);
+            dSdx[2][1] = Vector(  ry,  rx,  0.0);
+            dSdx[1][2] = dSdx[2][1];
+            dSdx[3][1] = Vector(  rz,  0.0,  rx);
+            dSdx[1][3] = dSdx[3][1];
+            dSdx[2][2] = Vector(- rx,  ry, -rz);
+            dSdx[3][2] = Vector( 0.0,  rz,  ry);
+            dSdx[2][3] = dSdx[3][2];
+            dSdx[3][3] = Vector( -rx, -ry,  rz);
+
+            // dqi/dxj = Sum_i Sum_j q1i dSijdx q0j /(Norm) * qi...
+            Vector dqidxj;
+            for (unsigned i=0;i<4;i++) {
+                //Calculate and append the derivatives due to each q-component separately
+                dqidxj.zero();
+                for (unsigned a=0;a<4;a++) {
+                    for (unsigned b=0;b<4;b++) {
+                        double fact=qmat[1][a]*qmat[0][b]/(l[0]-l[1])*qmat[1][i];
+                              fact+=qmat[2][a]*qmat[0][b]/(l[0]-l[2])*qmat[2][i];
+                              fact+=qmat[3][a]*qmat[0][b]/(l[0]-l[3])*qmat[3][i];
+                        dqidxj+= 1.0*fact*dSdx[a][b];
+                    }
+                }
+                setAtomsDerivatives(qptr[i], j, dqidxj);
+            }
+        }
+        
+        unsigned offset=rotref1.size();
+        for (unsigned j=0;j<rotref2.size();j++) {
+            if (refw1[j]==0) continue; //Only apply forces to weighted atoms.
+            
+            double const rx = rotref2[j][0];
+            double const ry = rotref2[j][1];
+            double const rz = rotref2[j][2];
+
+            // dSijdx : derivative of the S matrix, w.r.t. atom x_j 
+            dSdx[0][0] = Vector(  rx,  ry,  rz);
+            dSdx[1][0] = Vector( 0.0,  rz, -ry);
+            dSdx[0][1] = dSdx[1][0];
+            dSdx[2][0] = Vector( -rz, 0.0,  rx);
+            dSdx[0][2] = dSdx[2][0];
+            dSdx[3][0] = Vector(  ry, -rx,  0.0);
+            dSdx[0][3] = dSdx[3][0];
+            dSdx[1][1] = Vector(  rx, -ry, -rz);
+            dSdx[2][1] = Vector(  ry,  rx,  0.0);
+            dSdx[1][2] = dSdx[2][1];
+            dSdx[3][1] = Vector(  rz,  0.0,  rx);
+            dSdx[1][3] = dSdx[3][1];
+            dSdx[2][2] = Vector(- rx,  ry, -rz);
+            dSdx[3][2] = Vector( 0.0,  rz,  ry);
+            dSdx[2][3] = dSdx[3][2];
+            dSdx[3][3] = Vector( -rx, -ry,  rz);
+
+            // dqi/dxj = Sum_i Sum_j q1i dSijdx q0j /(Norm) * qi...
+            Vector dqidxj;
+            for (unsigned i=0;i<4;i++) {
+                //Calculate and append the derivatives due to each q-component separately
+                dqidxj.zero();
+                for (unsigned a=0;a<4;a++) {
+                    for (unsigned b=0;b<4;b++) {
+                        double fact=qmat[1][a]*qmat[0][b]/(l[0]-l[1])*qmat[1][i];
+                              fact+=qmat[2][a]*qmat[0][b]/(l[0]-l[2])*qmat[2][i];
+                              fact+=qmat[3][a]*qmat[0][b]/(l[0]-l[3])*qmat[3][i];
+                        dqidxj+= -1.0*fact*dSdx[a][b];
+                    }
+                }
+                setAtomsDerivatives(qptr[i], j+offset, dqidxj);
+            }
         }
     }
-    
-    //Not that all derivatives have been calculated set the system box derivatives.
+    //Now that all derivatives have been calculated set the system box derivatives.
     for (unsigned i=0;i<4;i++)
         setBoxDerivativesNoPbc(qptr[i]);
     
