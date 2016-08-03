@@ -323,6 +323,32 @@ VectorGeneric<3> quaternionRotate(const VectorGeneric<4>& qq,const VectorGeneric
     return b+b+v;
 }
 
+// Invoke Neil Dantam's Quaternion approach - Georgia Institute of Technology.
+inline
+VectorGeneric<4> quaternionInvert(const VectorGeneric<4>& q){
+    return VectorGeneric<4>(q[0],-q[1],-q[2],-q[3]);
+}
+
+inline
+VectorGeneric<4> quaternionProduct(const VectorGeneric<4>& v1,const VectorGeneric<4>& v2){
+    return VectorGeneric<4>(
+        v1[0]*v2[0]-v1[1]*v2[1]-v1[2]*v2[2]-v1[3]*v2[3],
+        v1[0]*v2[1]+v1[1]*v2[0]+v1[2]*v2[3]-v1[3]*v2[2],
+        v1[0]*v2[2]+v1[2]*v2[0]+v1[3]*v2[1]-v1[1]*v2[3],
+        v1[0]*v2[3]+v1[3]*v2[0]+v1[1]*v2[2]-v1[2]*v2[1]);
+}
+
+inline
+VectorGeneric<3> quaternionRotate(const VectorGeneric<4>& qq,const VectorGeneric<3>& v){
+    double q0 = qq[0];
+    VectorGeneric<3> qq=VectorGeneric<3>(qq[1],qq[2],qq[3]);
+    VectorGeneric<3> a;
+    VectorGeneric<3> b;
+    a = crossProduct(qq, v)+ q0*v;
+    b = crossProduct(qq, a);
+    return b+b+v;
+}
+
 template<unsigned n>
 double VectorGeneric<n>::modulo()const {
   return sqrt(modulo2());
