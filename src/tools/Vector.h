@@ -139,7 +139,7 @@ public:
   friend VectorGeneric<3> crossProduct(const VectorGeneric<3>&,const VectorGeneric<3>&);
 /// return q1 .vector. q2
 /// Only available for size 4
-  friend VectorGeneric<4> quaternionProduct(const VectorGeneric<4>&,const VectorGeneric<4>&); 
+  friend VectorGeneric<4> quaternionProduct(const VectorGeneric<4>&,const VectorGeneric<4>&);
 /// return v_rot = q .vector. v .vector q*
 /// Only available for size 3
   friend VectorGeneric<3> quaternionRotate(const VectorGeneric<4>&,const VectorGeneric<3>&);
@@ -341,11 +341,11 @@ VectorGeneric<4> quaternionProduct(const VectorGeneric<4>& v1,const VectorGeneri
 inline
 VectorGeneric<3> quaternionRotate(const VectorGeneric<4>& qq,const VectorGeneric<3>& v){
     double q0 = qq[0];
-    VectorGeneric<3> qq=VectorGeneric<3>(qq[1],qq[2],qq[3]);
+    VectorGeneric<3> vq=VectorGeneric<3>(qq[1],qq[2],qq[3]);
     VectorGeneric<3> a;
     VectorGeneric<3> b;
-    a = crossProduct(qq, v)+ q0*v;
-    b = crossProduct(qq, a);
+    a = crossProduct(vq, v)+ q0*v;
+    b = crossProduct(vq, a);
     return b+b+v;
 }
 
