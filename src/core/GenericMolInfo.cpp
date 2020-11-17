@@ -208,7 +208,7 @@ void GenericMolInfo::interpretSymbol( const std::string& symbol, std::vector<Ato
     if(!selector) {
       log<<"  MOLINFO "<<getLabel()<<": starting python interpreter\n";
       if(comm.Get_rank()==0) {
-        selector.reset(new Subprocess(pythonCmd+" \""+config::getPlumedRoot()+"\"/scripts/selector.sh --pdb " + reference));
+        selector=Tools::make_unique<Subprocess>(pythonCmd+" \""+config::getPlumedRoot()+"\"/scripts/selector.sh --pdb " + reference);
         selector->stop();
       }
     }
@@ -278,7 +278,7 @@ void GenericMolInfo::interpretSymbol( const std::string& symbol, std::vector<Ato
     return;
   }
   MolDataClass::specialSymbol( mytype, symbol, pdb, atoms );
-  if(atoms.empty()) error(symbol + " is not a label plumed knows");
+  if(atoms.empty()) error(symbol + " not found in your MOLINFO structure");
 }
 
 std::string GenericMolInfo::getAtomName(AtomNumber a)const {
